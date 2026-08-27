@@ -25,7 +25,7 @@ class Obstacles(ctypes.Structure):
     ]
 engine = ctypes.CDLL('./physics_engine.dll')
 
-engine.update_positions.argtypes = [
+engine.update.argtypes = [
     ctypes.POINTER(Particle),
     ctypes.c_int,
     ctypes.c_float,
@@ -36,5 +36,6 @@ engine.update_positions.argtypes = [
     ctypes.c_float,
     ctypes.c_float,
     ctypes.c_float,
+    ctypes.c_float,
 ]
-engine.update_positions.restype = None
+engine.update.restype = None
