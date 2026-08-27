@@ -1,5 +1,5 @@
 ﻿import ctypes
-class vector2D(ctypes.Structure):
+class Vector2D(ctypes.Structure):
     _fields_ = [
         ("x", ctypes.c_float),
         ("y", ctypes.c_float)
@@ -7,19 +7,20 @@ class vector2D(ctypes.Structure):
 
 class Particle(ctypes.Structure):
     _fields_ = [
-        ("position", vector2D),
-        ("velocity", vector2D)
+        ("position", Vector2D),
+        ("velocity", Vector2D),
+        ("density", ctypes.c_float)
     ]
 
-class wall(ctypes.Structure):
+class Wall(ctypes.Structure):
     _fields_ = [
-        ("point1", vector2D),
-        ("point2", vector2D)
+        ("point1", Vector2D),
+        ("point2", Vector2D)
     ]
 
-class obstacles(ctypes.Structure):
+class Obstacles(ctypes.Structure):
     _fields_ = [
-        ("walls", ctypes.POINTER(wall)),
+        ("walls", ctypes.POINTER(Wall)),
         ("count", ctypes.c_int)
     ]
 engine = ctypes.CDLL('./physics_engine.dll')
@@ -28,8 +29,12 @@ engine.update_positions.argtypes = [
     ctypes.POINTER(Particle),
     ctypes.c_int,
     ctypes.c_float,
-    vector2D,
-    obstacles,
-    ctypes.c_int
+    Vector2D,
+    Obstacles,
+    ctypes.c_int,
+    ctypes.c_float,
+    ctypes.c_float,
+    ctypes.c_float,
+    ctypes.c_float,
 ]
 engine.update_positions.restype = None

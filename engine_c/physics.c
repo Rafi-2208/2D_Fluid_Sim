@@ -1,14 +1,17 @@
 #include "definitions.h"
 #include <math.h>
 
-EXPORT void update_positions(particle *particles, const int count, const float delta_time, const vector2D gravity_force, const obstacles walls , const int collision_limit) {
+EXPORT void update_positions(particle_t *particles, const int count, const float delta_time, const vector2D_t gravity_force, const obstacles_t walls , const int collision_limit, const float max_influence_radius ,
+                             const float target_density, const float pressure_multiplier, const float collision_dampening) {
+    calculate_densities(particles, count, max_influence_radius);
+    calculate_pressure_forces(particles, count, target_density , pressure_multiplier, max_influence_radius, delta_time);
     update_velocities_gravity(particles, count, delta_time , gravity_force);
     for (int i = 0; i < count; i++) {
         float time_left = delta_time;
         int counter = 0;
         while (time_left > 0) {
             counter++;
-            time_left = calculate_movement_and_wall_collision(particles+i, walls, time_left);
+            time_left = calculate_movement_and_wall_collision(particles+i, walls, time_left , collision_dampening);
             if (counter >= collision_limit) {
                 break;
             }
@@ -19,7 +22,7 @@ EXPORT void update_positions(particle *particles, const int count, const float d
 
 
 
-void update_velocities_gravity(particle *particles, const int count, const float delta_time, const vector2D gravity_force) {
+void update_velocities_gravity(particle_t *particles, const int count, const float delta_time, const vector2D_t gravity_force) {
     for (int i = 0; i < count; i++) {
         particles[i].velocity.x = gravity_force.x * delta_time + particles[i].velocity.x;
         particles[i].velocity.y = gravity_force.y * delta_time + particles[i].velocity.y;
@@ -28,15 +31,15 @@ void update_velocities_gravity(particle *particles, const int count, const float
 
 //A + t(B - A) = C + u(D - C)
 //returns remaining time in a frame
-float calculate_movement_and_wall_collision(particle *particle, const obstacles walls, const float delta_time) {
-    const vector2D position_before = particle->position;
-    vector2D position_after = particle->position;
+float calculate_movement_and_wall_collision(particle_t *particle, const obstacles_t walls, const float delta_time , const float collision_dampening) {
+    const vector2D_t position_before = particle->position;
+    vector2D_t position_after = particle->position;
     position_after.x = position_before.x + particle->velocity.x * delta_time;
     position_after.y = position_before.y + particle->velocity.y * delta_time;
     float result = 2;
     int hit_wall_index = -1;
     for (int i = 0; i < walls.count; i++) {
-        const wall current_wall = walls.walls[i];
+        const wall_t current_wall = walls.walls[i];
         const float dX1 = position_after.x - position_before.x;
         const float dY1 = position_after.y - position_before.y;
         const float dX2 = current_wall.point1.x - current_wall.point2.x;
@@ -58,7 +61,7 @@ float calculate_movement_and_wall_collision(particle *particle, const obstacles 
         }
     }
     if (result != 2) {
-        calculate_bounce(particle, walls.walls[hit_wall_index], result * delta_time);
+        calculate_bounce(particle, walls.walls[hit_wall_index], result * delta_time , collision_dampening);
         return delta_time * (1 - result);
     }
     particle->position = position_after;
@@ -66,18 +69,68 @@ float calculate_movement_and_wall_collision(particle *particle, const obstacles 
 }
 
 
-void calculate_bounce(particle *particle, const wall wall, const float delta_time) {
+void calculate_bounce(particle_t *particle, const wall_t wall, const float delta_time , const float collision_dampening) {
     particle->position.x = particle->position.x + particle->velocity.x * delta_time;
     particle->position.y = particle->position.y + particle->velocity.y * delta_time;
-    vector2D normal = {.x = -(wall.point2.y - wall.point1.y), .y = wall.point2.x - wall.point1.x};
+    vector2D_t normal = {.x = -(wall.point2.y - wall.point1.y), .y = wall.point2.x - wall.point1.x};
     const float normal_length = sqrtf(normal.x * normal.x + normal.y * normal.y);
     if (normal_length > 0) {
         normal.x = normal.x / normal_length;
         normal.y = normal.y / normal_length;
         const float dot_product_wall_velocity = particle->velocity.x * normal.x + particle->velocity.y * normal.y;
-        particle->velocity.x = particle->velocity.x - 2 * dot_product_wall_velocity * normal.x;
-        particle->velocity.y = particle->velocity.y - 2 * dot_product_wall_velocity * normal.y;
-        particle->position.x = particle->position.x + normal.x * 0.0001;
-        particle->position.y = particle->position.y + normal.y * 0.0001;
+        particle->velocity.x = particle->velocity.x - 2 * dot_product_wall_velocity * normal.x * collision_dampening;
+        particle->velocity.y = particle->velocity.y - 2 * dot_product_wall_velocity * normal.y * collision_dampening;
+        particle->position.x = particle->position.x + normal.x * 0.0001f;
+        particle->position.y = particle->position.y + normal.y * 0.0001f;
+    }
+}
+
+
+float calculate_distance_squared(const particle_t particle_a, const particle_t particle_b) {
+    const float distance_x = particle_a.position.x - particle_b.position.x;
+    const float distance_y = particle_a.position.y - particle_b.position.y;
+    return distance_x * distance_x + distance_y * distance_y;
+}
+
+float calculate_influence(const particle_t particle_a, const particle_t particle_b , const float max_influence_radius) {
+    const float distance_squared = calculate_distance_squared(particle_a, particle_b);
+    if (distance_squared < max_influence_radius * max_influence_radius) {
+        const float distance = sqrtf(distance_squared);
+        return (max_influence_radius - distance) * (max_influence_radius - distance) * (max_influence_radius - distance);
+    }
+    return 0;
+}
+
+void calculate_densities(particle_t *particles, const int count, const float max_influence_radius) {
+    for (int i = 0; i < count; i++) {
+        particles[i].density = 0;
+        for (int j = 0; j < count; j++) {
+            particles[i].density += calculate_influence(particles[i], particles[j], max_influence_radius);
+        }
+    }
+}
+
+void calculate_pressure_forces(particle_t *particles, const int count, const float target_density, const float pressure_multiplier , const float max_influence_radius , const float delta_time){
+    for (int i = 0; i < count; i++) {
+        const float pressure = (particles[i].density - target_density) * pressure_multiplier;
+        for (int j = 0; j < count; j++) {
+            if (i != j) {
+                const float distance_squared = calculate_distance_squared(particles[i], particles[j]);
+                if (0.001f < distance_squared && distance_squared < max_influence_radius * max_influence_radius) {
+                    const float pressure2 = (particles[j].density - target_density) * pressure_multiplier;
+                    const float average_pressure = (pressure + pressure2) / 2;
+                    if (average_pressure > 0) {
+                        const float distance = sqrtf(distance_squared);
+                        const float pressure_gradient = (max_influence_radius - distance) * (max_influence_radius - distance);
+                        const vector2D_t pressure_force_vector = {
+                            .x = (particles[i].position.x - particles[j].position.x) / distance * pressure_gradient,
+                            .y = (particles[i].position.y - particles[j].position.y) / distance * pressure_gradient
+                        };
+                        particles[i].velocity.x = particles[i].velocity.x + pressure_force_vector.x * delta_time;
+                        particles[i].velocity.y = particles[i].velocity.y + pressure_force_vector.y * delta_time;
+                    }
+                }
+            }
+        }
     }
 }
