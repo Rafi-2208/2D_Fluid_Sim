@@ -1,4 +1,9 @@
 ﻿import ctypes
+import os
+from modifiable_variables import *
+os.add_dll_directory(MINGW_DLL_DIRECTORY)
+
+
 class Vector2D(ctypes.Structure):
     _fields_ = [
         ("x", ctypes.c_float),
@@ -9,7 +14,8 @@ class Particle(ctypes.Structure):
     _fields_ = [
         ("position", Vector2D),
         ("velocity", Vector2D),
-        ("density", ctypes.c_float)
+        ("density", ctypes.c_float),
+        ("area" , ctypes.c_int)
     ]
 
 class Wall(ctypes.Structure):
@@ -23,6 +29,15 @@ class Obstacles(ctypes.Structure):
         ("walls", ctypes.POINTER(Wall)),
         ("count", ctypes.c_int)
     ]
+
+class Area(ctypes.Structure):
+    _fields_ = [
+        ("area", ctypes.c_int),
+        ("count", ctypes.c_int),
+        ("particles", ctypes.POINTER(ctypes.POINTER(Particle)))
+
+    ]
+
 engine = ctypes.CDLL('./physics_engine.dll')
 
 engine.update.argtypes = [
@@ -36,6 +51,9 @@ engine.update.argtypes = [
     ctypes.c_float,
     ctypes.c_float,
     ctypes.c_float,
+    ctypes.c_float,
+    Vector2D,
+    ctypes.POINTER(Area),
     ctypes.c_float,
 ]
 engine.update.restype = None
