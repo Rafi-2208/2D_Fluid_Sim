@@ -19,8 +19,6 @@ walls_array[2].point1 = Vector2D(2000.0, 1200.0)
 walls_array[2].point2 = Vector2D(0.0, 1200.0)
 walls_array[3].point1 = Vector2D(0.0, 1200.0)
 walls_array[3].point2 = Vector2D(0.0, 0.0)
-walls_array[4].point1 = Vector2D(700.0, 1200.0)
-walls_array[4].point2 = Vector2D(700.0, 0.0)
 for i in range(RANDOM_WALL_COUNT):
     walls_array[i + 4].point1 = Vector2D(random.randint(0 , 2000), random.randint(0 , 1200))
     walls_array[i + 4].point2 = Vector2D(random.randint(-RANDOM_WALL_MAX_LEN, RANDOM_WALL_MAX_LEN) + walls_array[i + 4].point1.x, random.randint(-RANDOM_WALL_MAX_LEN, RANDOM_WALL_MAX_LEN) + walls_array[i + 4].point1.y)
@@ -61,18 +59,14 @@ for i in range(PARTICLE_COUNT):
     vel_y = random.randint(0, 0)
     particles_array[i].velocity = Vector2D(vel_x, vel_y)
 
-
+total_time = 0
+time_update = 0
+iteration = 0
+drawing_time = 0
 t = time.time()
 running = True
 while running:
-    if time.time() - t > 20:
-        walls_array[4].point1 = Vector2D(700.0, 1.0)
-        walls_array[4].point2 = Vector2D(700.0, 0.0)
-        obstacles = Obstacles()
-        obstacles.count = WALL_COUNT
-        obstacles.walls = ctypes.cast(walls_array, ctypes.POINTER(Wall))
-        FRICTION_MULTIPLIER = .9999
-
+    t = time.time()
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
@@ -82,7 +76,7 @@ while running:
 
     if dt > 0.016:
         dt = 0.016
-
+    t2 = time.time()
     engine.update(
         particles_array,
         PARTICLE_COUNT,
@@ -99,7 +93,8 @@ while running:
         areas_array,
         FRICTION_MULTIPLIER
     )
-
+    time_update += time.time() - t2
+    t3 = time.time()
     for i in range(PARTICLE_COUNT):
         if VISUAL_COLOUR == 0:
             p = particles_array[i]
@@ -123,8 +118,11 @@ while running:
         start_pos = (wall.point1.x, wall.point1.y)
         end_pos = (wall.point2.x, wall.point2.y)
         pygame.draw.line(screen, (255, 255, 255), start_pos, end_pos, 3)
+    drawing_time += time.time() - t3
 
     draw_text(screen, "FPS: " + str(round(fps_value, 2)), main_font, 20, 20, (0, 255, 0))
     pygame.display.flip()
-
+    total_time += time.time() - t
+    iteration+=1
+    print(round(time_update / total_time , 4) , round(time_update / iteration * 1000 , 2) , round(total_time / iteration * 1000 , 2) , round(drawing_time / iteration * 1000 , 2))
 pygame.quit()

@@ -38,7 +38,13 @@ class Area(ctypes.Structure):
 
     ]
 
-engine = ctypes.CDLL('./physics_engine.dll')
+
+if USE_GPU:
+    dll_name = './physics_engine_gpu.dll'
+else:
+    dll_name = './physics_engine.dll'
+engine = ctypes.CDLL(dll_name)
+
 
 engine.update.argtypes = [
     ctypes.POINTER(Particle),

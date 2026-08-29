@@ -1,19 +1,18 @@
-﻿cmake_minimum_required(VERSION 4.3)
-project(engine_c C)
+﻿cmake_minimum_required(VERSION 3.20)
+set(CMAKE_CUDA_COMPILER "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.3/bin/nvcc.exe")
 
-set(CMAKE_C_STANDARD 11)
+project(engine_c_gpu LANGUAGES CXX CUDA)
 
-add_library(engine_c SHARED physics.c
-        definitions.h
-)
-target_compile_options(engine_c PRIVATE -fopenmp)
-target_link_options(engine_c PRIVATE -fopenmp)
-find_package(OpenMP REQUIRED)
-target_link_libraries(engine_c PRIVATE OpenMP::OpenMP_C)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CUDA_STANDARD 17)
+
+set(CMAKE_CUDA_ARCHITECTURES "75;80;86;89")
+
+add_library(engine_c_gpu SHARED physics.cu definitions.h)
 
 
-add_custom_command(TARGET engine_c POST_BUILD
+add_custom_command(TARGET engine_c_gpu POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-        "$<TARGET_FILE:engine_c>"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../visuals_python/physics_engine.dll"
+        "$<TARGET_FILE:engine_c_gpu>"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../visuals_python/physics_engine_gpu.dll"
 )

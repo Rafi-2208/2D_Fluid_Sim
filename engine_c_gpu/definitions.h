@@ -4,11 +4,18 @@
 #ifndef ENGINE_C_DEFINITIONS_H
 #define ENGINE_C_DEFINITIONS_H
 
-#ifdef _WIN32
-#define EXPORT __declspec(dllexport)
+#ifdef __cplusplus
+#define EXPORT extern "C" __declspec(dllexport)
 #else
-#define EXPORT
+#define EXPORT __declspec(dllexport)
 #endif
+
+#define MAX_PARTICLES_PER_AREA 500
+
+typedef struct {
+    int count;
+    int particle_indexes[MAX_PARTICLES_PER_AREA];
+} gpu_area_t;
 
 typedef struct {
     float x, y;
@@ -43,30 +50,30 @@ EXPORT void update(particle_t *particles, int count, float delta_time, vector2D_
                    float pressure_multiplier, float collision_dampening, float viscosity, vector2D_t map_size,
                    area_t *areas , float friction_multiplier);
 
-void change_positions(particle_t *particles, int count, float delta_time, const obstacles_t * walls, float collision_dampening,
+void __global__ kernel_change_positions(particle_t *particles, int count, float delta_time, const wall_t * walls, int wall_count, float collision_dampening,
                       int collision_limit, float influence_radius, vector2D_t map_size);
 
-void update_velocities_gravity(particle_t *particles, int count, float delta_time, vector2D_t gravity_force , float friction_multiplier);
+void __global__ kernel_update_velocities_gravity(particle_t *particles, int count, float delta_time, vector2D_t gravity_force , float friction_multiplier);
 
-float calculate_movement_and_wall_collision(particle_t *particle, const obstacles_t * walls, float delta_time,
-                                            float collision_dampening, float influence_radius, vector2D_t map_size);
+float __device__ calculate_movement_and_wall_collision(particle_t *particle, const wall_t * walls, int wall_count, float delta_time, float collision_dampening, float influence_radius, vector2D_t map_size);
 
-void calculate_bounce(particle_t *particle, wall_t wall, float delta_time, float collision_dampening);
+void __device__ calculate_bounce(particle_t *particle, wall_t wall, float delta_time, float collision_dampening);
 
-float calculate_influence(const particle_t * particle_a, const particle_t * particle_b, float max_influence_radius, float max_influence_radius_squared);
+float __device__ calculate_distance_squared(const particle_t * particle_a, const particle_t * particle_b);
 
-void calculate_densities(particle_t *particles, int count, float max_influence_radius,
-                         const area_t *areas, vector2D_t map_size);
+float __device__ calculate_influence(const particle_t * particle_a, const particle_t * particle_b, float max_influence_radius, float max_influence_radius_squared);
 
-void calculate_pressure_and_viscosity_forces(particle_t *particles, int count, float target_density,
+void __global__ kernel_calculate_densities(particle_t *particles, int count, float max_influence_radius,
+                         const gpu_area_t *areas, vector2D_t map_size);
+
+void __global__ kernel_calculate_pressure_and_viscosity_forces(particle_t *particles, int count, float target_density,
                                float pressure_multiplier, float max_influence_radius,
-                               float delta_time, const area_t *areas, vector2D_t map_size, float viscosity);
+                               float delta_time, const gpu_area_t *areas, vector2D_t map_size, float viscosity);
 
-float calculate_distance_squared(const particle_t * particle_a, const particle_t * particle_b);
+int __device__ get_area_code(vector2D_t point, float influence_radius, vector2D_t size);
 
-int get_area_code(vector2D_t point, float influence_radius, vector2D_t size);
+void __global__ kernel_clear_grid(gpu_area_t *areas, int total_areas);
 
-void area_segregation(particle_t *particles, int count, area_t *areas, float max_influence_radius, vector2D_t size);
-
+void __global__ kernel_area_segregation(particle_t *particles, int count, gpu_area_t *areas, float max_influence_radius, vector2D_t size, int area_count);
 
 #endif //ENGINE_C_DEFINITIONS_H
