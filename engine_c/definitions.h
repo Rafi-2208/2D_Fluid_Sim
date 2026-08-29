@@ -43,17 +43,17 @@ EXPORT void update(particle_t *particles, int count, float delta_time, vector2D_
                    float pressure_multiplier, float collision_dampening, float viscosity, vector2D_t map_size,
                    area_t *areas , float friction_multiplier);
 
-void change_positions(particle_t *particles, int count, float delta_time, obstacles_t walls, float collision_dampening,
+void change_positions(particle_t *particles, int count, float delta_time, const obstacles_t * walls, float collision_dampening,
                       int collision_limit, float influence_radius, vector2D_t map_size);
 
 void update_velocities_gravity(particle_t *particles, int count, float delta_time, vector2D_t gravity_force , float friction_multiplier);
 
-float calculate_movement_and_wall_collision(particle_t *particle, obstacles_t walls, float delta_time,
+float calculate_movement_and_wall_collision(particle_t *particle, const obstacles_t * walls, float delta_time,
                                             float collision_dampening, float influence_radius, vector2D_t map_size);
 
 void calculate_bounce(particle_t *particle, wall_t wall, float delta_time, float collision_dampening);
 
-float calculate_influence(particle_t particle_a, particle_t particle_b, float max_influence_radius);
+float calculate_influence(const particle_t * particle_a, const particle_t * particle_b, float max_influence_radius, float max_influence_radius_squared);
 
 void calculate_densities(particle_t *particles, int count, float max_influence_radius,
                          const area_t *areas, vector2D_t map_size);
@@ -62,7 +62,7 @@ void calculate_pressure_and_viscosity_forces(particle_t *particles, int count, f
                                float pressure_multiplier, float max_influence_radius,
                                float delta_time, const area_t *areas, vector2D_t map_size, float viscosity);
 
-float calculate_distance_squared(particle_t particle_a, particle_t particle_b);
+float calculate_distance_squared(const particle_t * particle_a, const particle_t * particle_b);
 
 int get_area_code(vector2D_t point, float influence_radius, vector2D_t size);
 
