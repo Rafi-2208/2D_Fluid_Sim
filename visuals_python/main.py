@@ -8,7 +8,7 @@ MAP_SIZE = Vector2D(MAP_SIZE[0] , MAP_SIZE[1])
 GRAVITY = Vector2D(GRAVITY[0], GRAVITY[1])
 
 
-
+WALL_COUNT = WALL_COUNT + RANDOM_WALL_COUNT
 walls_array = Wall * WALL_COUNT
 walls_array = walls_array()
 walls_array[0].point1 = Vector2D(0.0, 0.0)
@@ -19,6 +19,11 @@ walls_array[2].point1 = Vector2D(2000.0, 1200.0)
 walls_array[2].point2 = Vector2D(0.0, 1200.0)
 walls_array[3].point1 = Vector2D(0.0, 1200.0)
 walls_array[3].point2 = Vector2D(0.0, 0.0)
+walls_array[4].point1 = Vector2D(700.0, 1200.0)
+walls_array[4].point2 = Vector2D(700.0, 0.0)
+for i in range(RANDOM_WALL_COUNT):
+    walls_array[i + 4].point1 = Vector2D(random.randint(0 , 2000), random.randint(0 , 1200))
+    walls_array[i + 4].point2 = Vector2D(random.randint(-RANDOM_WALL_MAX_LEN, RANDOM_WALL_MAX_LEN) + walls_array[i + 4].point1.x, random.randint(-RANDOM_WALL_MAX_LEN, RANDOM_WALL_MAX_LEN) + walls_array[i + 4].point1.y)
 
 obstacles = Obstacles()
 obstacles.count = WALL_COUNT
@@ -49,7 +54,7 @@ for i in range(total_areas):
 particles_array = Particle * PARTICLE_COUNT
 particles_array = particles_array()
 for i in range(PARTICLE_COUNT):
-    start_x = random.randint(100, 1900)
+    start_x = random.randint(100, 800)
     start_y = random.randint(100, 1100)
     particles_array[i].position = Vector2D(start_x, start_y)
     vel_x = random.randint(0, 0)
@@ -58,8 +63,17 @@ for i in range(PARTICLE_COUNT):
 
 
 t = time.time()
+time.sleep(8)
 running = True
 while running:
+    if time.time() - t > 20:
+        walls_array[4].point1 = Vector2D(700.0, 1.0)
+        walls_array[4].point2 = Vector2D(700.0, 0.0)
+        obstacles = Obstacles()
+        obstacles.count = WALL_COUNT
+        obstacles.walls = ctypes.cast(walls_array, ctypes.POINTER(Wall))
+        FRICTION_MULTIPLIER = .9999
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
@@ -85,16 +99,26 @@ while running:
         MAP_SIZE,
         areas_array,
         FRICTION_MULTIPLIER
-
     )
+
     for i in range(PARTICLE_COUNT):
-        p = particles_array[i]
-        colour_calculation_helper = min(1.0, p.density / VISUAL_COLOUR_PRESSURE_MULTIPLIER)
-        r = int(colour_calculation_helper * 255)
-        g = 50
-        b = int((1.0 - colour_calculation_helper) * 255)
-        pos = (int(p.position.x), int(p.position.y))
-        pygame.draw.circle(screen, (r, g, b), pos, VISUAL_RADIUS)
+        if VISUAL_COLOUR == 0:
+            p = particles_array[i]
+            colour_calculation_helper = min(1.0, p.density / VISUAL_COLOUR_PRESSURE_MULTIPLIER)
+            r = int(colour_calculation_helper * 255)
+            g = 50
+            b = int((1.0 - colour_calculation_helper) * 255)
+            pos = (int(p.position.x), int(p.position.y))
+            pygame.draw.circle(screen, (r, g, b), pos, VISUAL_RADIUS)
+        elif VISUAL_COLOUR == 1:
+            p = particles_array[i]
+            colour_calculation_helper = min(1.0, p.density / VISUAL_COLOUR_PRESSURE_MULTIPLIER)
+            lightness = 1.0 - colour_calculation_helper
+            r = int(150 * lightness)
+            g = int(50 + (150 * lightness))
+            b = int(150 + (105 * lightness))
+            pos = (int(p.position.x), int(p.position.y))
+            pygame.draw.circle(screen, (r, g, b), pos, VISUAL_RADIUS)
     for i in range(obstacles.count):
         wall = obstacles.walls[i]
         start_pos = (wall.point1.x, wall.point1.y)
