@@ -58,14 +58,11 @@ float calculate_influence(particle_t particle_a, particle_t particle_b, float ma
 void calculate_densities(particle_t *particles, int count, float max_influence_radius,
                          const area_t *areas, vector2D_t map_size);
 
-void calculate_pressure_forces(particle_t *particles, int count, float target_density,
+void calculate_pressure_and_viscosity_forces(particle_t *particles, int count, float target_density,
                                float pressure_multiplier, float max_influence_radius,
-                               float delta_time, const area_t *areas, vector2D_t map_size);
+                               float delta_time, const area_t *areas, vector2D_t map_size, float viscosity);
 
 float calculate_distance_squared(particle_t particle_a, particle_t particle_b);
-
-void calculate_viscosity_forces(particle_t *particles, int count, float max_influence_radius,
-                                float viscosity, float delta_time, const area_t *areas, vector2D_t map_size);
 
 int get_area_code(vector2D_t point, float influence_radius, vector2D_t size);
 

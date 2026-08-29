@@ -5,12 +5,13 @@
 EXPORT void update(particle_t *particles, const int count, const float delta_time, const vector2D_t gravity_force,
                    const obstacles_t walls, const int collision_limit, const float max_influence_radius,
                    const float target_density, const float pressure_multiplier, const float collision_dampening,
-                   const float viscosity, const vector2D_t map_size, area_t *areas , const float friction_multiplier) {
+                   const float viscosity, const vector2D_t map_size, area_t *areas, const float friction_multiplier) {
     area_segregation(particles, count, areas, max_influence_radius, map_size);
     calculate_densities(particles, count, max_influence_radius, areas, map_size);
-    calculate_pressure_forces(particles, count, target_density, pressure_multiplier, max_influence_radius, delta_time, areas, map_size);
-    calculate_viscosity_forces(particles, count, max_influence_radius, viscosity, delta_time, areas, map_size);
-    update_velocities_gravity(particles, count, delta_time, gravity_force , friction_multiplier);
+    calculate_pressure_and_viscosity_forces(particles, count, target_density, pressure_multiplier, max_influence_radius,
+                                            delta_time,
+                                            areas, map_size, viscosity);
+    update_velocities_gravity(particles, count, delta_time, gravity_force, friction_multiplier);
     change_positions(particles, count, delta_time, walls, collision_dampening, collision_limit, max_influence_radius,
                      map_size);
 }
@@ -34,7 +35,7 @@ void change_positions(particle_t *particles, const int count, const float delta_
 
 
 void update_velocities_gravity(particle_t *particles, const int count, const float delta_time,
-                               const vector2D_t gravity_force , const float friction_multiplier) {
+                               const vector2D_t gravity_force, const float friction_multiplier) {
     for (int i = 0; i < count; i++) {
         particles[i].velocity.x = gravity_force.x * delta_time + particles[i].velocity.x * friction_multiplier;
         particles[i].velocity.y = gravity_force.y * delta_time + particles[i].velocity.y * friction_multiplier;
@@ -130,7 +131,7 @@ void calculate_densities(particle_t *particles, const int count, const float max
                          const area_t *areas, const vector2D_t map_size) {
     const int x_limit = (int) (map_size.x / max_influence_radius);
     const int y_limit = (int) (map_size.y / max_influence_radius);
-    #pragma omp parallel for
+#pragma omp parallel for
     for (int i = 0; i < count; i++) {
         particles[i].density = 0;
         const int cell_x = (int) (particles[i].position.x / max_influence_radius);
@@ -154,59 +155,19 @@ void calculate_densities(particle_t *particles, const int count, const float max
 }
 
 
-void calculate_pressure_forces(particle_t *particles, const int count, const float target_density,
-                               const float pressure_multiplier, const float max_influence_radius,
-                               const float delta_time, const area_t *areas, const vector2D_t map_size) {
+void calculate_pressure_and_viscosity_forces(particle_t *particles, const int count, const float target_density,
+                                             const float pressure_multiplier, const float max_influence_radius,
+                                             const float delta_time, const area_t *areas, const vector2D_t map_size,
+                                             const float viscosity) {
     const int x_limit = (int) (map_size.x / max_influence_radius);
     const int y_limit = (int) (map_size.y / max_influence_radius);
-    #pragma omp parallel for
+#pragma omp parallel for
     for (int i = 0; i < count; i++) {
         const float pressure = (particles[i].density - target_density) * pressure_multiplier;
         const int cell_x = (int) (particles[i].position.x / max_influence_radius);
         const int cell_y = (int) (particles[i].position.y / max_influence_radius);
-        for (int dy = -1; dy <= 1; dy++) {
-            for (int dx = -1; dx <= 1; dx++) {
-                const int neighbor_x = cell_x + dx;
-                const int neighbor_y = cell_y + dy;
-                if (neighbor_x >= 0 && neighbor_x < x_limit &&
-                    neighbor_y >= 0 && neighbor_y < y_limit) {
-                    const int cell_index = neighbor_y * x_limit + neighbor_x;
-                    const area_t current_area = areas[cell_index];
-                    for (int j = 0; j < current_area.count; j++) {
-                        const particle_t *neighbor = current_area.particles[j];
-                        if (&particles[i] != neighbor) {
-                            const float distance_squared = calculate_distance_squared(particles[i], *neighbor);
-                            if (0.001f < distance_squared && distance_squared < max_influence_radius * max_influence_radius) {
-                                const float pressure2 = (neighbor->density - target_density) * pressure_multiplier;
-                                const float average_pressure = (pressure + pressure2) / 2;
-                                if (average_pressure > 0) {
-                                    const float distance = sqrtf(distance_squared);
-                                    const float pressure_gradient =
-                                            (max_influence_radius - distance) * (max_influence_radius - distance);
-                                    const vector2D_t pressure_force_vector = {
-                                        .x = (particles[i].position.x - neighbor->position.x) / distance * pressure_gradient * average_pressure,
-                                        .y = (particles[i].position.y - neighbor->position.y) / distance * pressure_gradient * average_pressure,
-                                    };
-                                    particles[i].velocity.x = particles[i].velocity.x + pressure_force_vector.x * delta_time;
-                                    particles[i].velocity.y = particles[i].velocity.y + pressure_force_vector.y * delta_time;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-void calculate_viscosity_forces(particle_t *particles, const int count, const float max_influence_radius,
-                                const float viscosity, const float delta_time, const area_t *areas, const vector2D_t map_size) {
-    const int x_limit = (int) (map_size.x / max_influence_radius);
-    const int y_limit = (int) (map_size.y / max_influence_radius);
-    #pragma omp parallel for
-    for (int i = 0; i < count; i++) {
-        const int cell_x = (int) (particles[i].position.x / max_influence_radius);
-        const int cell_y = (int) (particles[i].position.y / max_influence_radius);
+        float velocity_change_x = 0.0f;
+        float velocity_change_y = 0.0f;
         for (int dy = -1; dy <= 1; dy++) {
             for (int dx = -1; dx <= 1; dx++) {
                 const int neighbor_x = cell_x + dx;
@@ -220,22 +181,40 @@ void calculate_viscosity_forces(particle_t *particles, const int count, const fl
                         if (&particles[i] != neighbor) {
                             const float distance_squared = calculate_distance_squared(particles[i], *neighbor);
                             if (distance_squared < max_influence_radius * max_influence_radius) {
-                                particles[i].velocity.x = particles[i].velocity.x + (
-                                                              neighbor->velocity.x - particles[i].velocity.x) * (
-                                                              1 - sqrtf(distance_squared) / max_influence_radius) * viscosity *
-                                                          delta_time;
-                                particles[i].velocity.y = particles[i].velocity.y + (
-                                                              neighbor->velocity.y - particles[i].velocity.y) * (
-                                                              1 - sqrtf(distance_squared) / max_influence_radius) * viscosity *
-                                                          delta_time;
+                                const float distance = sqrtf(distance_squared);
+                                if (0.001f < distance_squared) {
+                                    const float pressure2 = (neighbor->density - target_density) * pressure_multiplier;
+                                    const float average_pressure = (pressure + pressure2) / 2;
+                                    if (average_pressure > 0) {
+                                        const float pressure_gradient =
+                                                (max_influence_radius - distance) * (max_influence_radius - distance);
+                                        const vector2D_t pressure_force_vector = {
+                                            .x = (particles[i].position.x - neighbor->position.x) / distance *
+                                                 pressure_gradient * average_pressure,
+                                            .y = (particles[i].position.y - neighbor->position.y) / distance *
+                                                 pressure_gradient * average_pressure,
+                                        };
+                                        velocity_change_x += +pressure_force_vector.x * delta_time;
+                                        velocity_change_y += +pressure_force_vector.y * delta_time;
+                                    }
+                                }
+                                const float viscosity_relative =
+                                        (1 - distance / max_influence_radius) * viscosity * delta_time;
+                                velocity_change_x += (neighbor->velocity.x - particles[i].velocity.x) *
+                                        viscosity_relative;
+                                velocity_change_y += (neighbor->velocity.y - particles[i].velocity.y) *
+                                        viscosity_relative;
                             }
                         }
                     }
                 }
             }
         }
+        particles[i].velocity.x += velocity_change_x;
+        particles[i].velocity.y += velocity_change_y;
     }
 }
+
 
 int get_area_code(const vector2D_t point, const float influence_radius, const vector2D_t size) {
     int x = (int) (point.x / influence_radius);
