@@ -63,7 +63,6 @@ for i in range(PARTICLE_COUNT):
 
 
 t = time.time()
-time.sleep(8)
 running = True
 while running:
     if time.time() - t > 20:
