@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 4.3)
+cmake_minimum_required(VERSION 4.3)
 project(engine_c C)
 
 set(CMAKE_C_STANDARD 11)
@@ -15,5 +15,5 @@ target_link_libraries(engine_c PRIVATE OpenMP::OpenMP_C)
 add_custom_command(TARGET engine_c POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
         "$<TARGET_FILE:engine_c>"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../visuals_python/physics_engine.dll"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../visuals_python/physics_engine_cpu_multi.dll"
 )

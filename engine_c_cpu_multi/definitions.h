@@ -1,4 +1,4 @@
-﻿//
+//
 // Created by rafal on 26.08.2026.
 //
 #ifndef ENGINE_C_DEFINITIONS_H

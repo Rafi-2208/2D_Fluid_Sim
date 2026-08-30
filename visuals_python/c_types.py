@@ -39,10 +39,16 @@ class Area(ctypes.Structure):
     ]
 
 
-if USE_GPU:
+if RENDERING == 2:
     dll_name = './physics_engine_gpu.dll'
-else:
-    dll_name = './physics_engine.dll'
+elif RENDERING == 1:
+    dll_name = './physics_engine_cpu_multi.dll'
+elif RENDERING == 0:
+    dll_name = './physics_engine_cpu_single.dll'
+
+
+
+
 engine = ctypes.CDLL(dll_name)
 
 

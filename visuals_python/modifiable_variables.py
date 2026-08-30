@@ -17,4 +17,4 @@ WALL_COUNT = 4
 RANDOM_WALL_COUNT = 0
 RANDOM_WALL_MAX_LEN = 1000
 VISUAL_COLOUR = 1 #0 - red-> blue , #1 -> water colour
-USE_GPU = True
+RENDERING = 2 # 0-> cpu single core , 1 -> c-cpu multi core, 2 -> gpu
