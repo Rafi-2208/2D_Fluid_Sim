@@ -59,7 +59,6 @@ for i in range(PARTICLE_COUNT):
     vel_y = random.randint(0, 0)
     particles_array[i].velocity = Vector2D(vel_x, vel_y)
 
-
 total_time = 0
 time_update = 0
 iteration = 0
