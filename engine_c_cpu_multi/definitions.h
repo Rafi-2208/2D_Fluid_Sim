@@ -10,6 +10,7 @@
 #define EXPORT
 #endif
 
+#include <stdint.h>
 typedef struct {
     float x, y;
 } vector2D_t;
@@ -68,5 +69,9 @@ int get_area_code(vector2D_t point, float influence_radius, vector2D_t size);
 
 void area_segregation(particle_t *particles, int count, area_t *areas, float max_influence_radius, vector2D_t size);
 
+EXPORT void drawing(particle_t *particles, int count, obstacles_t * walls , int radius ,  vector2D_t screen_size, uint32_t * frame_buffer , int colour_type , int pitch , float visual_pressure_multiplier);
 
+void drawing_particles( particle_t *particles, int count ,  int radius ,  vector2D_t screen_size, uint32_t * frame_buffer , int colour_type , int pitch , float visual_pressure_multiplier);
+
+void drawing_walls(obstacles_t * walls , vector2D_t screen_size, uint32_t * frame_buffer , int pitch);
 #endif //ENGINE_C_DEFINITIONS_H

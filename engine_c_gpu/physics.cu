@@ -3,7 +3,8 @@
 particle_t *d_particles = nullptr;
 wall_t *d_walls = nullptr;
 gpu_area_t *d_areas = nullptr;
-
+uint32_t *d_frame_buffer = nullptr;
+int current_frame_buffer_size = 0;
 
 
 
@@ -296,4 +297,118 @@ EXPORT void update(particle_t *particles, const int count, const float delta_tim
                             map_size);
     cudaDeviceSynchronize();
     cudaMemcpy(particles, d_particles, count * sizeof(particle_t), cudaMemcpyDeviceToHost);
+}
+
+
+__global__ void drawing_particles(particle_t *particles, const int count, const int radius, const vector2D_t screen_size,
+                       uint32_t *frame_buffer, const int colour_type, const int pitch,
+                       const float visual_pressure_multiplier) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < count) {
+        int x = (int) particles[i].position.x;
+        int y = (int) particles[i].position.y;
+        float density = particles[i].density;
+        float colour_calculation_helper = density / visual_pressure_multiplier;
+        if (colour_calculation_helper > 1) {
+            colour_calculation_helper = 1;
+        }
+        int r = 0, g = 0, b = 0;
+        if (colour_type == 0) {
+            r = (int) (colour_calculation_helper * 255);
+            g = 50;
+            b = (int) ((1 - colour_calculation_helper) * 255);
+        } else if (colour_type == 1) {
+            float lightness = 1 - colour_calculation_helper;
+            r = (int) (150 * lightness);
+            g = (int) (50 + 150 * lightness);
+            b = (int) (150 + 105 * lightness);
+        }
+        uint32_t colour = (255 << 24) | (r << 16) | (g << 8) | b;
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -radius; dy <= radius; dy++) {
+                if (dx * dx + dy * dy < radius * radius) {
+                    if (x + dx >= 0 && y + dy >= 0 && x + dx < (int) screen_size.x && y + dy < (int) screen_size.y) {
+
+                        int index = ((y + dy) * (pitch / 4)) + x + dx;
+                        frame_buffer[index] = colour;
+                    }
+                }
+            }
+        }
+    }
+}
+
+__device__ void drawing_walls(wall_t *walls, int wall_count, vector2D_t screen_size, uint32_t *frame_buffer, int pitch) {
+    for (int i = 0; i < wall_count; i++) {
+        int start_x = (int) walls[i].point1.x;
+        int start_y = (int) walls[i].point1.y;
+        int end_x = (int) walls[i].point2.x;
+        int end_y = (int) walls[i].point2.y;
+        uint32_t colour = (255 << 24) | (255 << 16) | (255 << 8) | 255;
+        int dx = start_x - end_x;
+        int dy = start_y - end_y;
+        if (dx < 0) {
+            dx = -dx;
+        }
+        if (dy > 0) {
+            dy = -dy;
+        }
+        int step_x = 1;
+        int step_y = 1;
+        if (end_x < start_x) {
+            step_x = -1;
+        }
+        if (end_y < start_y) {
+            step_y = -1;
+        }
+        int error = dx + dy;
+        while (1) {
+            if (start_x >= 0 && start_x < (int) screen_size.x && start_y >= 0 && start_y < (int) screen_size.y) {
+                int index = (start_y * (pitch / 4)) + start_x;
+                frame_buffer[index] = colour;
+            }
+            if (start_x == end_x && start_y == end_y) {
+                break;
+            }
+            int error2 = error * 2;
+            if (error2 >= dy) {
+                error += dy;
+                start_x += step_x;
+            }
+            if (error2 <= dx) {
+                error += dx;
+                start_y += step_y;
+            }
+        }
+    }
+}
+
+
+__global__ void kernel_drawing_walls(wall_t *walls, int wall_count, vector2D_t screen_size, uint32_t *frame_buffer, int pitch) {
+    if (threadIdx.x == 0 && blockIdx.x == 0) {
+        drawing_walls(walls, wall_count, screen_size, frame_buffer, pitch);
+    }
+}
+
+EXPORT void drawing(particle_t *particles, const int count, obstacles_t *walls, const int radius,
+                    const vector2D_t screen_size, uint32_t *frame_buffer, const int colour_type, const int pitch,
+                    const float visual_pressure_multiplier) {
+
+    int required_buffer_size = (pitch / 4) * (int)screen_size.y * sizeof(uint32_t);
+    if (current_frame_buffer_size < required_buffer_size) {
+        if (d_frame_buffer != nullptr) cudaFree(d_frame_buffer);
+        cudaMalloc((void**)&d_frame_buffer, required_buffer_size);
+        current_frame_buffer_size = required_buffer_size;
+    }
+    cudaMemset(d_frame_buffer, 0, required_buffer_size);
+
+    int threads = 256;
+    int blocks = (count + threads - 1) / threads;
+    drawing_particles<<<blocks, threads>>>(d_particles, count, radius, screen_size,
+                                           d_frame_buffer, colour_type, pitch,
+                                           visual_pressure_multiplier);
+
+    kernel_drawing_walls<<<1, 1>>>(d_walls, walls->count, screen_size, d_frame_buffer, pitch);
+    cudaDeviceSynchronize();
+    cudaMemcpy(frame_buffer, d_frame_buffer, required_buffer_size, cudaMemcpyDeviceToHost);
 }

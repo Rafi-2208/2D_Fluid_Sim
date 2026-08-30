@@ -260,3 +260,95 @@ void area_segregation(particle_t *particles, const int count, area_t *areas, con
         }
     }
 }
+
+EXPORT void drawing(particle_t *particles, const int count, obstacles_t *walls, const int radius,
+                    const vector2D_t screen_size, uint32_t *frame_buffer, const int colour_type, const int pitch,
+                    const float visual_pressure_multiplier) {
+    drawing_particles(particles, count, radius, screen_size, frame_buffer, colour_type, pitch,
+                      visual_pressure_multiplier);
+    drawing_walls(walls, screen_size, frame_buffer, pitch);
+}
+
+void drawing_particles(particle_t *particles, const int count, const int radius, const vector2D_t screen_size,
+                       uint32_t *frame_buffer, const int colour_type, const int pitch,
+                       const float visual_pressure_multiplier) {
+#pragma omp parallel for
+    for (int i = 0; i < count; i++) {
+        int x = (int) particles[i].position.x;
+        int y = (int) particles[i].position.y;
+        float density = particles[i].density;
+        float colour_calculation_helper = density / visual_pressure_multiplier;
+        if (colour_calculation_helper > 1) {
+            colour_calculation_helper = 1;
+        }
+        int r = 0, g = 0, b = 0;
+        if (colour_type == 0) {
+            r = (int) (colour_calculation_helper * 255);
+            g = 50;
+            b = (int) ((1 - colour_calculation_helper) * 255);
+        } else if (colour_type == 1) {
+            float lightness = 1 - colour_calculation_helper;
+            r = (int) (150 * lightness);
+            g = (int) (50 + 150 * lightness);
+            b = (int) (150 + 105 * lightness);
+        }
+        uint32_t colour = (r << 16) | (g << 8) | b;
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -radius; dy <= radius; dy++) {
+                if (dx * dx + dy * dy < radius * radius) {
+                    if (x + dx >= 0 && y + dy >= 0 && x + dx < (int) screen_size.x && y + dy < (int) screen_size.y) {
+
+                        int index = ((y + dy) * (pitch / 4)) + x + dx;
+                        frame_buffer[index] = colour;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void drawing_walls(obstacles_t *walls, vector2D_t screen_size, uint32_t *frame_buffer, int pitch) {
+    for (int i = 0; i < walls->count; i++) {
+        int start_x = (int) walls->walls[i].point1.x;
+        int start_y = (int) walls->walls[i].point1.y;
+        int end_x = (int) walls->walls[i].point2.x;
+        int end_y = (int) walls->walls[i].point2.y;
+        uint32_t colour = (255 << 16) | (255 << 8) | 255;
+        int dx = start_x - end_x;
+        int dy = start_y - end_y;
+        if (dx < 0) {
+            dx = -dx;
+        }
+        if (dy > 0) {
+            dy = -dy;
+        }
+        int step_x = 1;
+        int step_y = 1;
+        if (end_x < start_x) {
+            step_x = -1;
+        }
+        if (end_y < start_y) {
+            step_y = -1;
+        }
+        int error = dx + dy;
+        while (1) {
+            if (start_x >= 0 && start_x < (int) screen_size.x && start_y >= 0 && start_y < (int) screen_size.y) {
+                int index = (start_y * (pitch / 4)) + start_x;
+                frame_buffer[index] = colour;
+            }
+            if (start_x == end_x && start_y == end_y) {
+                break;
+            }
+            int error2 = error * 2;
+            if (error2 >= dy) {
+                error += dy;
+                start_x += step_x;
+            }
+            if (error2 <= dx) {
+                error += dx;
+                start_y += step_y;
+            }
+        }
+    }
+}
+

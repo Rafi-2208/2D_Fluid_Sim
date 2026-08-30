@@ -91,38 +91,35 @@ while running:
         VISCOSITY,
         MAP_SIZE,
         areas_array,
-        FRICTION_MULTIPLIER
+        FRICTION_MULTIPLIER,
     )
     time_update += time.time() - t2
     t3 = time.time()
-    for i in range(PARTICLE_COUNT):
-        if VISUAL_COLOUR == 0:
-            p = particles_array[i]
-            colour_calculation_helper = min(1.0, p.density / VISUAL_COLOUR_PRESSURE_MULTIPLIER)
-            r = int(colour_calculation_helper * 255)
-            g = 50
-            b = int((1.0 - colour_calculation_helper) * 255)
-            pos = (int(p.position.x), int(p.position.y))
-            pygame.draw.circle(screen, (r, g, b), pos, VISUAL_RADIUS)
-        elif VISUAL_COLOUR == 1:
-            p = particles_array[i]
-            colour_calculation_helper = min(1.0, p.density / VISUAL_COLOUR_PRESSURE_MULTIPLIER)
-            lightness = 1.0 - colour_calculation_helper
-            r = int(150 * lightness)
-            g = int(50 + (150 * lightness))
-            b = int(150 + (105 * lightness))
-            pos = (int(p.position.x), int(p.position.y))
-            pygame.draw.circle(screen, (r, g, b), pos, VISUAL_RADIUS)
-    for i in range(obstacles.count):
-        wall = obstacles.walls[i]
-        start_pos = (wall.point1.x, wall.point1.y)
-        end_pos = (wall.point2.x, wall.point2.y)
-        pygame.draw.line(screen, (255, 255, 255), start_pos, end_pos, 3)
-    drawing_time += time.time() - t3
 
+    screen.fill((0, 0, 0))
+    screen.lock()
+    pitch = screen.get_pitch()
+    view = memoryview(screen.get_view('1'))
+    buffer_array = (ctypes.c_uint32 * (len(view) // 4)).from_buffer(view)
+    engine.drawing(
+        particles_array,
+        PARTICLE_COUNT,
+        ctypes.byref(obstacles),
+        VISUAL_RADIUS,
+        MAP_SIZE,
+        buffer_array,
+        VISUAL_COLOUR,
+        pitch,
+        VISUAL_COLOUR_PRESSURE_MULTIPLIER
+    )
+    drawing_time += time.time() - t3
+    view.release()
+    del buffer_array
+    del view
+    screen.unlock()
     draw_text(screen, "FPS: " + str(round(fps_value, 2)), main_font, 20, 20, (0, 255, 0))
     pygame.display.flip()
     total_time += time.time() - t
     iteration+=1
-    print(round(time_update / total_time , 4) , round(time_update / iteration * 1000 , 2) , round(total_time / iteration * 1000 , 2) , round(drawing_time / iteration * 1000 , 2))
+    print(round((time_update + drawing_time) / (0.016 * iteration) , 4) , round(time_update / iteration * 1000 , 2) , round(total_time / iteration * 1000 , 2) , round(drawing_time / iteration * 1000 , 2))
 pygame.quit()

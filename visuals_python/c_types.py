@@ -69,3 +69,16 @@ engine.update.argtypes = [
     ctypes.c_float,
 ]
 engine.update.restype = None
+
+engine.drawing.argtypes = [
+    ctypes.POINTER(Particle),
+    ctypes.c_int,
+    ctypes.POINTER(Obstacles),
+    ctypes.c_int,
+    Vector2D,
+    ctypes.c_void_p,
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_float,
+]
+engine.drawing.restype = None

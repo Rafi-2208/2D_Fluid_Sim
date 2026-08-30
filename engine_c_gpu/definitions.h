@@ -76,4 +76,16 @@ void __global__ kernel_clear_grid(gpu_area_t *areas, int total_areas);
 
 void __global__ kernel_area_segregation(particle_t *particles, int count, gpu_area_t *areas, float max_influence_radius, vector2D_t size, int area_count);
 
+__global__ void drawing_particles(particle_t *particles, const int count, const int radius, const vector2D_t screen_size,
+                       uint32_t *frame_buffer, const int colour_type, const int pitch,
+                       const float visual_pressure_multiplier);
+
+__device__ void drawing_walls(wall_t *walls, int wall_count, vector2D_t screen_size, uint32_t *frame_buffer, int pitch);
+
+__global__ void kernel_drawing_walls(wall_t *walls, int wall_count, vector2D_t screen_size, uint32_t *frame_buffer, int pitch);
+
+EXPORT void drawing(particle_t *particles, const int count, obstacles_t *walls, const int radius,
+                    const vector2D_t screen_size, uint32_t *frame_buffer, const int colour_type, const int pitch,
+                    const float visual_pressure_multiplier);
+
 #endif //ENGINE_C_DEFINITIONS_H
