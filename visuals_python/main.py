@@ -22,14 +22,17 @@ walls_array[3].point2 = Vector2D(0.0, 0.0)
 for i in range(RANDOM_WALL_COUNT):
     walls_array[i + 4].point1 = Vector2D(random.randint(0 , 2000), random.randint(0 , 1200))
     walls_array[i + 4].point2 = Vector2D(random.randint(-RANDOM_WALL_MAX_LEN, RANDOM_WALL_MAX_LEN) + walls_array[i + 4].point1.x, random.randint(-RANDOM_WALL_MAX_LEN, RANDOM_WALL_MAX_LEN) + walls_array[i + 4].point1.y)
+for i in range(RANDOM_WALL_COUNT + WALL_COUNT):
+    walls_array[i].normal = calculate_normal(walls_array[i])
+
 
 obstacles = Obstacles()
 obstacles.count = WALL_COUNT
 obstacles.walls = ctypes.cast(walls_array, ctypes.POINTER(Wall))
 
 
-
-
+FRICTION_MULTIPLIER = FRICTION_MULTIPLIER ** (1.0 / SUB_STEPS)
+WALL_DEFAULT_PUSH = WALL_DEFAULT_PUSH / SUB_STEPS
 pygame.init()
 screen = pygame.display.set_mode((int(MAP_SIZE.x) , int(MAP_SIZE.y)))
 clock = pygame.time.Clock()
@@ -52,8 +55,8 @@ for i in range(total_areas):
 particles_array = Particle * PARTICLE_COUNT
 particles_array = particles_array()
 for i in range(PARTICLE_COUNT):
-    start_x = random.randint(100, 800)
-    start_y = random.randint(100, 1100)
+    start_x = random.randint(10, 500)
+    start_y = random.randint(10, 1190)
     particles_array[i].position = Vector2D(start_x, start_y)
     vel_x = random.randint(0, 0)
     vel_y = random.randint(0, 0)
@@ -92,6 +95,8 @@ while running:
         MAP_SIZE,
         areas_array,
         FRICTION_MULTIPLIER,
+        WALL_DEFAULT_PUSH,
+        SUB_STEPS,
     )
     time_update += time.time() - t2
     t3 = time.time()
@@ -117,7 +122,8 @@ while running:
     del buffer_array
     del view
     screen.unlock()
-    draw_text(screen, "FPS: " + str(round(fps_value, 2)), main_font, 20, 20, (0, 255, 0))
+    if FPS_COUNTER:
+        draw_text(screen, "FPS: " + str(round(fps_value, 2)), main_font, 20, 20, (0, 255, 0))
     pygame.display.flip()
     total_time += time.time() - t
     iteration+=1

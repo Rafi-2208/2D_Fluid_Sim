@@ -7,8 +7,6 @@ uint32_t *d_frame_buffer = nullptr;
 int current_frame_buffer_size = 0;
 
 
-
-
 void __global__ kernel_change_positions(particle_t *particles, const int count, const float delta_time,
                                         const wall_t *walls, const int wall_count,
                                         const float collision_dampening, const int collision_limit,
@@ -29,25 +27,13 @@ void __global__ kernel_change_positions(particle_t *particles, const int count, 
     }
 }
 
-
-void __global__ kernel_update_velocities_gravity(particle_t *particles, const int count, const float delta_time,
-                                                 const vector2D_t gravity_force, const float friction_multiplier) {
-    float gravity_per_time_x = gravity_force.x * delta_time;\
-    float gravity_per_time_y = gravity_force.y * delta_time;
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < count) {
-        particles[i].velocity.x = gravity_per_time_x + particles[i].velocity.x * friction_multiplier;
-        particles[i].velocity.y = gravity_per_time_y + particles[i].velocity.y * friction_multiplier;
-    }
-}
-
 //A + t(B - A) = C + u(D - C)
 //returns remaining time in a frameA
 float __device__ calculate_movement_and_wall_collision(particle_t *particle, const wall_t *walls,
-                                                                const int wall_count, const float delta_time,
-                                                                const float collision_dampening,
-                                                                const float influence_radius,
-                                                                const vector2D_t map_size) {
+                                                       const int wall_count, const float delta_time,
+                                                       const float collision_dampening,
+                                                       const float influence_radius,
+                                                       const vector2D_t map_size) {
     const vector2D_t position_before = particle->position;
     vector2D_t position_after = particle->position;
     position_after.x = position_before.x + particle->velocity.x * delta_time;
@@ -87,7 +73,7 @@ float __device__ calculate_movement_and_wall_collision(particle_t *particle, con
 
 
 void __device__ calculate_bounce(particle_t *particle, const wall_t wall, const float delta_time,
-                                          const float collision_dampening) {
+                                 const float collision_dampening) {
     particle->position.x = particle->position.x + particle->velocity.x * delta_time;
     particle->position.y = particle->position.y + particle->velocity.y * delta_time;
     vector2D_t normal = {-(wall.point2.y - wall.point1.y), wall.point2.x - wall.point1.x};
@@ -118,8 +104,8 @@ float __device__ calculate_distance_squared(const particle_t *particle_a, const 
 }
 
 float __device__ calculate_influence(const particle_t *particle_a, const particle_t *particle_b,
-                                              const float max_influence_radius,
-                                              const float max_influence_radius_squared) {
+                                     const float max_influence_radius,
+                                     const float max_influence_radius_squared) {
     const float distance_squared = calculate_distance_squared(particle_a, particle_b);
     if (distance_squared < max_influence_radius_squared) {
         const float distance = sqrtf(distance_squared);
@@ -163,20 +149,23 @@ void __global__ kernel_calculate_densities(particle_t *particles, const int coun
 }
 
 
-void __global__ kernel_calculate_pressure_and_viscosity_forces(particle_t *particles, const int count, const float target_density,
-                                             const float pressure_multiplier, const float max_influence_radius,
-                                             const float delta_time, const gpu_area_t *areas, const vector2D_t map_size,
-                                             const float viscosity) {
+void __global__ kernel_calculate_forces(particle_t *particles, const int count, const float target_density,
+                                        const float pressure_multiplier, const float max_influence_radius,
+                                        const float delta_time, const gpu_area_t *areas, const vector2D_t map_size,
+                                        const float viscosity, wall_t *walls, int wall_count,
+                                        float wall_default_push, vector2D_t gravity_force, float friction_multiplier) {
     const float max_influence_radius_squared = max_influence_radius * max_influence_radius;
     const int x_limit = (int) (map_size.x / max_influence_radius);
     const int y_limit = (int) (map_size.y / max_influence_radius);
+    float gravity_per_time_x = gravity_force.x * delta_time;
+    float gravity_per_time_y = gravity_force.y * delta_time;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < count) {
         const float pressure = (particles[i].density - target_density) * pressure_multiplier;
         const int cell_x = (int) (particles[i].position.x / max_influence_radius);
         const int cell_y = (int) (particles[i].position.y / max_influence_radius);
-        float velocity_change_x = 0.0f;
-        float velocity_change_y = 0.0f;
+        float velocity_change_x = gravity_per_time_x;
+        float velocity_change_y = gravity_per_time_y;
         for (int dy = -1; dy <= 1; dy++) {
             for (int dx = -1; dx <= 1; dx++) {
                 const int neighbor_x = cell_x + dx;
@@ -188,12 +177,14 @@ void __global__ kernel_calculate_pressure_and_viscosity_forces(particle_t *parti
                     if (limit > MAX_PARTICLES_PER_AREA) limit = MAX_PARTICLES_PER_AREA;
                     for (int j = 0; j < limit; j++) {
                         int neighbor_id = areas[cell_index].particle_indexes[j];
-                        if (i  != neighbor_id) {
-                            const float distance_squared = calculate_distance_squared(particles + i, &particles[neighbor_id]);
+                        if (i != neighbor_id) {
+                            const float distance_squared = calculate_distance_squared(
+                                particles + i, &particles[neighbor_id]);
                             if (distance_squared < max_influence_radius_squared) {
                                 const float distance = sqrtf(distance_squared);
                                 if (0.001f < distance_squared) {
-                                    const float pressure2 = (particles[neighbor_id].density - target_density) * pressure_multiplier;
+                                    const float pressure2 =
+                                            (particles[neighbor_id].density - target_density) * pressure_multiplier;
                                     const float average_pressure = (pressure + pressure2) / 2;
                                     if (average_pressure > 0) {
                                         const float pressure_gradient =
@@ -220,11 +211,43 @@ void __global__ kernel_calculate_pressure_and_viscosity_forces(particle_t *parti
                 }
             }
         }
-        particles[i].velocity.x += velocity_change_x;
-        particles[i].velocity.y += velocity_change_y;
+        vector2D_t wall_push = calculate_wall_force(particles + i, walls, wall_count, velocity_change_x,
+                                                    velocity_change_y, max_influence_radius, wall_default_push);
+        particles[i].velocity.x += velocity_change_x + wall_push.x;
+        particles[i].velocity.y += velocity_change_y + wall_push.y;
+        particles[i].velocity.x = particles[i].velocity.x * friction_multiplier;
+        particles[i].velocity.y = particles[i].velocity.y * friction_multiplier;
     }
 }
 
+vector2D_t __device__ calculate_wall_force(particle_t *particle, wall_t *walls, int wall_count, float velocity_change_x,
+                                           float velocity_change_y, float max_influence_radius,
+                                           float wall_default_push) {
+    vector2D_t wall_force = {0, 0};
+    for (int i = 0; i < wall_count; i++) {
+        float directional_distance = (particle->position.x - walls[i].point1.x) * walls[i].normal.x +
+                                     (particle->position.y - walls[i].point1.y) * walls[i].normal.y;
+        float distance = directional_distance;
+        float sign = 1;
+        if (distance < 0) {
+            distance = -distance;
+            sign = -1;
+        }
+        if (distance < max_influence_radius) {
+            float vel_along_normal = walls[i].normal.x * velocity_change_x +
+                                     walls[i].normal.y * velocity_change_y;
+
+            if (directional_distance * vel_along_normal < 0) {
+                float distance_factor = (1.0f - distance / max_influence_radius);
+                float distance_factor_squared = distance_factor * distance_factor;
+                float force_magnitude = -vel_along_normal * distance_factor_squared;
+                wall_force.x += force_magnitude * walls[i].normal.x + walls[i].normal.x * wall_default_push * sign;
+                wall_force.y += force_magnitude * walls[i].normal.y + walls[i].normal.y * wall_default_push * sign;;
+            }
+        }
+    }
+    return wall_force;
+}
 
 int __device__ get_area_code(const vector2D_t point, const float influence_radius, const vector2D_t size) {
     int x = (int) (point.x / influence_radius);
@@ -268,41 +291,49 @@ __global__ void kernel_area_segregation(particle_t *particles, const int count, 
     }
 }
 
-EXPORT void update(particle_t *particles, const int count, const float delta_time, const vector2D_t gravity_force,
+EXPORT void update(particle_t *particles, const int count, float delta_time, const vector2D_t gravity_force,
                    const obstacles_t walls, const int collision_limit, const float max_influence_radius,
                    const float target_density, const float pressure_multiplier, const float collision_dampening,
-                   const float viscosity, const vector2D_t map_size, area_t *areas, const float friction_multiplier) {
+                   const float viscosity, const vector2D_t map_size, area_t *areas, const float friction_multiplier,
+                   float wall_default_push , int substeps) {
     const int x_limit = (int) (map_size.x / max_influence_radius);
     const int y_limit = (int) (map_size.y / max_influence_radius);
     int total_areas = x_limit * y_limit;
     if (d_particles == nullptr) {
-        cudaMalloc((void**)&d_particles, count * sizeof(particle_t));
-        cudaMalloc((void**)&d_walls, walls.count * sizeof(wall_t));
-        cudaMalloc((void**)&d_areas, total_areas * sizeof(gpu_area_t));
+        cudaMalloc((void **) &d_particles, count * sizeof(particle_t));
+        cudaMalloc((void **) &d_walls, walls.count * sizeof(wall_t));
+        cudaMalloc((void **) &d_areas, total_areas * sizeof(gpu_area_t));
     }
     cudaMemcpy(d_particles, particles, count * sizeof(particle_t), cudaMemcpyHostToDevice);
     cudaMemcpy(d_walls, walls.walls, walls.count * sizeof(wall_t), cudaMemcpyHostToDevice);
     int threads = 256;
     int blocks = (count + threads - 1) / threads;
     int area_blocks = (total_areas + threads - 1) / threads;
-    kernel_clear_grid<<<area_blocks , threads>>>(d_areas, total_areas);
-    kernel_area_segregation<<<blocks , threads>>>(d_particles, count, d_areas, max_influence_radius, map_size , total_areas);
-    kernel_calculate_densities<<<blocks , threads>>>(d_particles, count, max_influence_radius, d_areas, map_size);
-    kernel_calculate_pressure_and_viscosity_forces<<<blocks , threads>>>(d_particles, count, target_density, pressure_multiplier, max_influence_radius,
-                                            delta_time,
-                                            d_areas, map_size, viscosity);
-    kernel_update_velocities_gravity<<<blocks , threads>>>(d_particles, count, delta_time, gravity_force, friction_multiplier);
-    kernel_change_positions<<<blocks , threads>>>(d_particles, count, delta_time, d_walls, walls.count, collision_dampening,
-                            collision_limit, max_influence_radius,
-                            map_size);
+    delta_time = delta_time / (float)substeps;
+    for (int i = 0; i < substeps; i++) {
+        kernel_clear_grid<<<area_blocks , threads>>>(d_areas, total_areas);
+        kernel_area_segregation<<<blocks , threads>>>(d_particles, count, d_areas, max_influence_radius, map_size,
+                                                      total_areas);
+        kernel_calculate_densities<<<blocks , threads>>>(d_particles, count, max_influence_radius, d_areas, map_size);
+        kernel_calculate_forces<<<blocks , threads>>>(d_particles, count, target_density, pressure_multiplier,
+                                                      max_influence_radius,
+                                                      delta_time,
+                                                      d_areas, map_size, viscosity, d_walls, walls.count, wall_default_push,
+                                                      gravity_force, friction_multiplier);
+        kernel_change_positions<<<blocks , threads>>>(d_particles, count, delta_time, d_walls, walls.count,
+                                                      collision_dampening,
+                                                      collision_limit, max_influence_radius,
+                                                      map_size);
+    }
     cudaDeviceSynchronize();
     cudaMemcpy(particles, d_particles, count * sizeof(particle_t), cudaMemcpyDeviceToHost);
 }
 
 
-__global__ void drawing_particles(particle_t *particles, const int count, const int radius, const vector2D_t screen_size,
-                       uint32_t *frame_buffer, const int colour_type, const int pitch,
-                       const float visual_pressure_multiplier) {
+__global__ void drawing_particles(particle_t *particles, const int count, const int radius,
+                                  const vector2D_t screen_size,
+                                  uint32_t *frame_buffer, const int colour_type, const int pitch,
+                                  const float visual_pressure_multiplier) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < count) {
         int x = (int) particles[i].position.x;
@@ -328,7 +359,6 @@ __global__ void drawing_particles(particle_t *particles, const int count, const 
             for (int dy = -radius; dy <= radius; dy++) {
                 if (dx * dx + dy * dy < radius * radius) {
                     if (x + dx >= 0 && y + dy >= 0 && x + dx < (int) screen_size.x && y + dy < (int) screen_size.y) {
-
                         int index = ((y + dy) * (pitch / 4)) + x + dx;
                         frame_buffer[index] = colour;
                     }
@@ -338,7 +368,8 @@ __global__ void drawing_particles(particle_t *particles, const int count, const 
     }
 }
 
-__device__ void drawing_walls(wall_t *walls, int wall_count, vector2D_t screen_size, uint32_t *frame_buffer, int pitch) {
+__device__ void drawing_walls(wall_t *walls, int wall_count, vector2D_t screen_size, uint32_t *frame_buffer,
+                              int pitch) {
     for (int i = 0; i < wall_count; i++) {
         int start_x = (int) walls[i].point1.x;
         int start_y = (int) walls[i].point1.y;
@@ -384,7 +415,8 @@ __device__ void drawing_walls(wall_t *walls, int wall_count, vector2D_t screen_s
 }
 
 
-__global__ void kernel_drawing_walls(wall_t *walls, int wall_count, vector2D_t screen_size, uint32_t *frame_buffer, int pitch) {
+__global__ void kernel_drawing_walls(wall_t *walls, int wall_count, vector2D_t screen_size, uint32_t *frame_buffer,
+                                     int pitch) {
     if (threadIdx.x == 0 && blockIdx.x == 0) {
         drawing_walls(walls, wall_count, screen_size, frame_buffer, pitch);
     }
@@ -393,11 +425,10 @@ __global__ void kernel_drawing_walls(wall_t *walls, int wall_count, vector2D_t s
 EXPORT void drawing(particle_t *particles, const int count, obstacles_t *walls, const int radius,
                     const vector2D_t screen_size, uint32_t *frame_buffer, const int colour_type, const int pitch,
                     const float visual_pressure_multiplier) {
-
-    int required_buffer_size = (pitch / 4) * (int)screen_size.y * sizeof(uint32_t);
+    int required_buffer_size = (pitch / 4) * (int) screen_size.y * sizeof(uint32_t);
     if (current_frame_buffer_size < required_buffer_size) {
         if (d_frame_buffer != nullptr) cudaFree(d_frame_buffer);
-        cudaMalloc((void**)&d_frame_buffer, required_buffer_size);
+        cudaMalloc((void **) &d_frame_buffer, required_buffer_size);
         current_frame_buffer_size = required_buffer_size;
     }
     cudaMemset(d_frame_buffer, 0, required_buffer_size);

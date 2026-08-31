@@ -21,7 +21,8 @@ class Particle(ctypes.Structure):
 class Wall(ctypes.Structure):
     _fields_ = [
         ("point1", Vector2D),
-        ("point2", Vector2D)
+        ("point2", Vector2D),
+        ("normal" , Vector2D)
     ]
 
 class Obstacles(ctypes.Structure):
@@ -67,6 +68,8 @@ engine.update.argtypes = [
     Vector2D,
     ctypes.POINTER(Area),
     ctypes.c_float,
+    ctypes.c_float,
+    ctypes.c_int,
 ]
 engine.update.restype = None
 

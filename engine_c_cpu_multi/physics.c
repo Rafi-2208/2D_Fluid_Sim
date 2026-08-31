@@ -3,18 +3,20 @@
 #include <stdio.h>
 
 
-EXPORT void update(particle_t *particles, const int count, const float delta_time, const vector2D_t gravity_force,
+EXPORT void update(particle_t *particles, const int count, float delta_time, const vector2D_t gravity_force,
                    const obstacles_t walls, const int collision_limit, const float max_influence_radius,
                    const float target_density, const float pressure_multiplier, const float collision_dampening,
-                   const float viscosity, const vector2D_t map_size, area_t *areas, const float friction_multiplier) {
-    area_segregation(particles, count, areas, max_influence_radius, map_size);
-    calculate_densities(particles, count, max_influence_radius, areas, map_size);
-    calculate_pressure_and_viscosity_forces(particles, count, target_density, pressure_multiplier, max_influence_radius,
-                                            delta_time,
-                                            areas, map_size, viscosity);
-    update_velocities_gravity(particles, count, delta_time, gravity_force, friction_multiplier);
-    change_positions(particles, count, delta_time, &walls, collision_dampening, collision_limit, max_influence_radius,
-                     map_size);
+                   const float viscosity, const vector2D_t map_size, area_t *areas, const float friction_multiplier , float wall_default_push , int substeps) {
+    delta_time = delta_time / substeps;
+    for (int i = 0; i < substeps; i++) {
+        area_segregation(particles, count, areas, max_influence_radius, map_size);
+        calculate_densities(particles, count, max_influence_radius, areas, map_size);
+        calculate_forces(particles, count, target_density, pressure_multiplier, max_influence_radius,
+                                                delta_time,
+                                                areas, map_size, viscosity , walls , wall_default_push , gravity_force, friction_multiplier);
+        change_positions(particles, count, delta_time, &walls, collision_dampening, collision_limit, max_influence_radius,
+                         map_size);
+    }
 }
 
 void change_positions(particle_t *particles, const int count, const float delta_time, const obstacles_t * walls,
@@ -32,18 +34,6 @@ void change_positions(particle_t *particles, const int count, const float delta_
                 break;
             }
         }
-    }
-}
-
-
-void update_velocities_gravity(particle_t *particles, const int count, const float delta_time,
-                               const vector2D_t gravity_force, const float friction_multiplier) {
-    float gravity_per_time_x = gravity_force.x * delta_time;\
-    float gravity_per_time_y = gravity_force.y * delta_time;
-#pragma omp parallel for
-    for (int i = 0; i < count; i++) {
-        particles[i].velocity.x = gravity_per_time_x + particles[i].velocity.x * friction_multiplier;
-        particles[i].velocity.y = gravity_per_time_y + particles[i].velocity.y * friction_multiplier;
     }
 }
 
@@ -161,20 +151,22 @@ void calculate_densities(particle_t *particles, const int count, const float max
 }
 
 
-void calculate_pressure_and_viscosity_forces(particle_t *particles, const int count, const float target_density,
+void calculate_forces(particle_t *particles, const int count, const float target_density,
                                              const float pressure_multiplier, const float max_influence_radius,
                                              const float delta_time, const area_t *areas, const vector2D_t map_size,
-                                             const float viscosity) {
+                                             const float viscosity , obstacles_t obstacles , float wall_default_push , vector2D_t gravity_force , float friction_multiplier) {
     const float max_influence_radius_squared = max_influence_radius * max_influence_radius;
     const int x_limit = (int) (map_size.x / max_influence_radius);
     const int y_limit = (int) (map_size.y / max_influence_radius);
+    float gravity_per_time_x = gravity_force.x * delta_time;
+    float gravity_per_time_y = gravity_force.y * delta_time;
 #pragma omp parallel for
     for (int i = 0; i < count; i++) {
         const float pressure = (particles[i].density - target_density) * pressure_multiplier;
         const int cell_x = (int) (particles[i].position.x / max_influence_radius);
         const int cell_y = (int) (particles[i].position.y / max_influence_radius);
-        float velocity_change_x = 0.0f;
-        float velocity_change_y = 0.0f;
+        float velocity_change_x = gravity_per_time_x;
+        float velocity_change_y = gravity_per_time_y;
         for (int dy = -1; dy <= 1; dy++) {
             for (int dx = -1; dx <= 1; dx++) {
                 const int neighbor_x = cell_x + dx;
@@ -217,11 +209,40 @@ void calculate_pressure_and_viscosity_forces(particle_t *particles, const int co
                 }
             }
         }
-        particles[i].velocity.x += velocity_change_x;
-        particles[i].velocity.y += velocity_change_y;
+        vector2D_t wall_push = calculate_wall_force(particles + i, obstacles, velocity_change_x , velocity_change_y , max_influence_radius , wall_default_push);
+        particles[i].velocity.x += velocity_change_x + wall_push.x;
+        particles[i].velocity.y += velocity_change_y + wall_push.y;
+        particles[i].velocity.x = particles[i].velocity.x * friction_multiplier;
+        particles[i].velocity.y = particles[i].velocity.y * friction_multiplier;
     }
 }
 
+vector2D_t calculate_wall_force(particle_t *particle, const obstacles_t walls, float velocity_change_x, float velocity_change_y, float max_influence_radius , float wall_default_push) {
+    vector2D_t wall_force = {.x = 0, .y = 0};
+    for (int i = 0; i < walls.count; i++) {
+        float directional_distance = (particle->position.x - walls.walls[i].point1.x) * walls.walls[i].normal.x +
+                            (particle->position.y - walls.walls[i].point1.y) * walls.walls[i].normal.y;
+        float distance = directional_distance;
+        float sign = 1;
+        if (distance < 0) {
+            distance = -distance;
+            sign = -1;
+        }
+        if (distance < max_influence_radius) {
+            float vel_along_normal = walls.walls[i].normal.x * velocity_change_x +
+                                     walls.walls[i].normal.y * velocity_change_y;
+
+            if (directional_distance * vel_along_normal < 0) {
+                float distance_factor = (1.0f - distance / max_influence_radius);
+                float distance_factor_squared = distance_factor * distance_factor;
+                float force_magnitude = -vel_along_normal * distance_factor_squared;
+                wall_force.x += force_magnitude * walls.walls[i].normal.x + walls.walls[i].normal.x * wall_default_push * sign;
+                wall_force.y += force_magnitude * walls.walls[i].normal.y + walls.walls[i].normal.y * wall_default_push * sign;;
+            }
+        }
+    }
+    return wall_force;
+}
 
 int get_area_code(const vector2D_t point, const float influence_radius, const vector2D_t size) {
     int x = (int) (point.x / influence_radius);
