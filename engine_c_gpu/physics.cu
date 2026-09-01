@@ -296,6 +296,8 @@ EXPORT void update(particle_t *particles, const int count, float delta_time, con
                    const float target_density, const float pressure_multiplier, const float collision_dampening,
                    const float viscosity, const vector2D_t map_size, area_t *areas, const float friction_multiplier,
                    float wall_default_push , int substeps) {
+
+    
     const int x_limit = (int) (map_size.x / max_influence_radius);
     const int y_limit = (int) (map_size.y / max_influence_radius);
     int total_areas = x_limit * y_limit;

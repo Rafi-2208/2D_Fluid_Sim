@@ -1,7 +1,7 @@
 ﻿import ctypes
 import os
 from modifiable_variables import *
-os.add_dll_directory(MINGW_DLL_DIRECTORY)
+os.add_dll_directory(VARIABLES["MINGW_DLL_DIRECTORY"])
 
 
 class Vector2D(ctypes.Structure):
@@ -40,11 +40,11 @@ class Area(ctypes.Structure):
     ]
 
 
-if RENDERING == 2:
+if VARIABLES["RENDERING"] == 2:
     dll_name = './physics_engine_gpu.dll'
-elif RENDERING == 1:
+elif VARIABLES["RENDERING"] == 1:
     dll_name = './physics_engine_cpu_multi.dll'
-elif RENDERING == 0:
+elif VARIABLES["RENDERING"] == 0:
     dll_name = './physics_engine_cpu_single.dll'
 
 
