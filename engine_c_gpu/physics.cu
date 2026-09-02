@@ -5,7 +5,8 @@ wall_t *d_walls = nullptr;
 gpu_area_t *d_areas = nullptr;
 uint32_t *d_frame_buffer = nullptr;
 int current_frame_buffer_size = 0;
-
+int old_count = 0;
+int old_wall_count = 0;
 
 void __global__ kernel_change_positions(particle_t *particles, const int count, const float delta_time,
                                         const wall_t *walls, const int wall_count,
@@ -225,14 +226,24 @@ vector2D_t __device__ calculate_wall_force(particle_t *particle, wall_t *walls, 
                                            float wall_default_push) {
     vector2D_t wall_force = {0, 0};
     for (int i = 0; i < wall_count; i++) {
-        float directional_distance = (particle->position.x - walls[i].point1.x) * walls[i].normal.x +
-                                     (particle->position.y - walls[i].point1.y) * walls[i].normal.y;
+        float pdx = particle->position.x - walls[i].point1.x;
+        float pdy = particle->position.y - walls[i].point1.y;
+        float wall_dx = walls[i].point2.x - walls[i].point1.x;
+        float wall_dy = walls[i].point2.y - walls[i].point1.y;
+        float projection = pdx * wall_dx + pdy * wall_dy;
+        float wall_length_squared = wall_dx * wall_dx + wall_dy * wall_dy;
+        if (projection < 0.0f || projection > wall_length_squared) {
+            continue;
+        }
+        float directional_distance = pdx * walls[i].normal.x + pdy * walls[i].normal.y;
         float distance = directional_distance;
         float sign = 1;
+
         if (distance < 0) {
             distance = -distance;
             sign = -1;
         }
+
         if (distance < max_influence_radius) {
             float vel_along_normal = walls[i].normal.x * velocity_change_x +
                                      walls[i].normal.y * velocity_change_y;
@@ -242,7 +253,7 @@ vector2D_t __device__ calculate_wall_force(particle_t *particle, wall_t *walls, 
                 float distance_factor_squared = distance_factor * distance_factor;
                 float force_magnitude = -vel_along_normal * distance_factor_squared;
                 wall_force.x += force_magnitude * walls[i].normal.x + walls[i].normal.x * wall_default_push * sign;
-                wall_force.y += force_magnitude * walls[i].normal.y + walls[i].normal.y * wall_default_push * sign;;
+                wall_force.y += force_magnitude * walls[i].normal.y + walls[i].normal.y * wall_default_push * sign;
             }
         }
     }
@@ -301,10 +312,12 @@ EXPORT void update(particle_t *particles, const int count, float delta_time, con
     const int x_limit = (int) (map_size.x / max_influence_radius);
     const int y_limit = (int) (map_size.y / max_influence_radius);
     int total_areas = x_limit * y_limit;
-    if (d_particles == nullptr) {
+    if (d_particles == nullptr || count != old_count || walls.count != old_wall_count) {
         cudaMalloc((void **) &d_particles, count * sizeof(particle_t));
         cudaMalloc((void **) &d_walls, walls.count * sizeof(wall_t));
         cudaMalloc((void **) &d_areas, total_areas * sizeof(gpu_area_t));
+        old_wall_count = walls.count;
+        old_count = count;
     }
     cudaMemcpy(d_particles, particles, count * sizeof(particle_t), cudaMemcpyHostToDevice);
     cudaMemcpy(d_walls, walls.walls, walls.count * sizeof(wall_t), cudaMemcpyHostToDevice);
