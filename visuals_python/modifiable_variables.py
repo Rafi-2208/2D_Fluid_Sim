@@ -16,7 +16,7 @@ VARIABLES = {
     "FRICTION_MULTIPLIER": 0.999,
     "MINGW_DLL_DIRECTORY": r"D:\C\CLion 2026.2.1\bin\mingw\bin",
     "WALL_COUNT": 4,
-    "RANDOM_WALL_COUNT": 0,
+    "RANDOM_WALL_COUNT": 2,
     "RANDOM_WALL_MAX_LEN": 1000,
     "WALL_DEFAULT_PUSH": 2,
     "VISUAL_COLOUR": 1,
@@ -28,6 +28,11 @@ VARIABLES = {
     "STARTING_POSITION_Y": (10, 1000),
     "STARTING_SPEED_X": (0, 0),
     "STARTING_SPEED_Y": (0, 0),
-
+    "ADD_WALL_CLICKED": False,
+    "REMOVE_WALL_CLICKED": False,
+    "WALL_POINT_1": (0, 0),
+    "WALL_POINT_2": (0, 0),
+    "MAX_PARTICLES" : 200000,
+    "MAX_WALLS": 100,
 }
 

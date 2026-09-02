@@ -15,10 +15,12 @@ class Gui:
         self.tab_spawn = tk.Frame(self.notebook)
         self.tab_physics = tk.Frame(self.notebook)
         self.tab_visuals = tk.Frame(self.notebook)
+        self.tab_walls = tk.Frame(self.notebook)
 
         self.notebook.add(self.tab_spawn, text="Spawning")
         self.notebook.add(self.tab_physics, text="Physics")
         self.notebook.add(self.tab_visuals, text="Visuals")
+        self.notebook.add(self.tab_walls, text="Walls")
 
         self.create_trigger_button(self.tab_spawn, "Restart Simulation", self.variables, "RESTART_CLICKED")
         self.create_slider_vector(self.tab_spawn, "Starting position X range", 0.0, 2000.0,
@@ -29,8 +31,12 @@ class Gui:
                                   self.variables["STARTING_SPEED_X"], is_int=True)
         self.create_slider_vector(self.tab_spawn, "Starting speed Y range", -5000.0, 5000.0,
                                   self.variables["STARTING_SPEED_Y"], is_int=True)
-        self.create_slider_single(self.tab_spawn, "Spawned particle count", 1, 500000, self.variables,
+        self.create_slider_single(self.tab_spawn, "Spawned particle count", 1, self.variables["MAX_PARTICLES"], self.variables,
                                   "STARTING_PARTICLE_COUNT" , is_int=True)
+        self.create_slider_single(self.tab_spawn, "Random wall count", 0.0, 50.0,
+                                  self.variables , "RANDOM_WALL_COUNT", is_int=True)
+        self.create_slider_single(self.tab_spawn, "Random wall max len", 0.0, 2000.0,
+                                  self.variables , "RANDOM_WALL_MAX_LEN", is_int=True)
 
 
         self.create_slider_vector(self.tab_physics, "Gravity", -1000.0, 1000.0, self.variables["GRAVITY"])
@@ -43,7 +49,7 @@ class Gui:
                                   "COLLISION_DAMPENING")
         self.create_slider_single(self.tab_physics, "Viscosity", 0.0, 10.0, self.variables, "VISCOSITY")
         self.create_slider_single(self.tab_physics, "Friction Multiplier", 0.0, 1.0, self.variables,
-                                  "FRICTION_MULTIPLIER")
+                                  "FRICTION_MULTIPLIER" , resolution=0.001)
         self.create_slider_single(self.tab_physics, "Wall Default Push", 0.0, 10.0, self.variables, "WALL_DEFAULT_PUSH")
 
 
@@ -51,6 +57,16 @@ class Gui:
                                   is_int=True)
         self.create_slider_single(self.tab_visuals, "Visual Color Mult", 10000, 500000, self.variables,
                                   "VISUAL_COLOUR_PRESSURE_MULTIPLIER", is_int=True)
+
+        self.create_trigger_button(self.tab_walls, "Add Wall", self.variables, "ADD_WALL_CLICKED")
+        self.create_trigger_button(self.tab_walls, "Remove Wall", self.variables, "REMOVE_WALL_CLICKED")
+        self.create_slider_vector(self.tab_walls, "Wall point 1", -100.0, 2500.0,
+                                  self.variables["WALL_POINT_1"], is_int=True)
+        self.create_slider_vector(self.tab_walls, "Wall point 2", -100.0, 2500.0,
+                                  self.variables["WALL_POINT_2"], is_int=True)
+
+
+
 
     def run(self):
         self.window.mainloop()
