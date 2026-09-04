@@ -9,6 +9,8 @@ class Gui:
         self.window = tk.Tk()
         self.window.title("Simulation Controls")
 
+        self.sync_elements = []
+
         self.notebook = ttk.Notebook(self.window)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
@@ -31,14 +33,14 @@ class Gui:
                                   self.variables["STARTING_SPEED_X"], is_int=True)
         self.create_slider_vector(self.tab_spawn, "Starting speed Y range", -5000.0, 5000.0,
                                   self.variables["STARTING_SPEED_Y"], is_int=True)
-        self.create_slider_single(self.tab_spawn, "Spawned particle count", 1, self.variables["MAX_PARTICLES"], self.variables,
-                                  "STARTING_PARTICLE_COUNT" , is_int=True)
+        self.create_slider_single(self.tab_spawn, "Spawned particle count", 1, self.variables["MAX_PARTICLES"],
+                                  self.variables,
+                                  "STARTING_PARTICLE_COUNT", is_int=True)
         self.create_slider_single(self.tab_spawn, "Random wall count", 0.0, 50.0,
-                                  self.variables , "RANDOM_WALL_COUNT", is_int=True)
+                                  self.variables, "RANDOM_WALL_COUNT", is_int=True)
         self.create_slider_single(self.tab_spawn, "Random wall max len", 0.0, 2000.0,
-                                  self.variables , "RANDOM_WALL_MAX_LEN", is_int=True)
+                                  self.variables, "RANDOM_WALL_MAX_LEN", is_int=True)
         self.create_slider_vector(self.tab_spawn, "Window size", 0.0, 3000.0, self.variables["NEW_MAP_SIZE"])
-
 
         self.create_slider_vector(self.tab_physics, "Gravity", -1000.0, 1000.0, self.variables["GRAVITY"])
         self.create_slider_single(self.tab_physics, "Max Influence Dist", 1, 100, self.variables,
@@ -50,9 +52,8 @@ class Gui:
                                   "COLLISION_DAMPENING")
         self.create_slider_single(self.tab_physics, "Viscosity", 0.0, 10.0, self.variables, "VISCOSITY")
         self.create_slider_single(self.tab_physics, "Friction Multiplier", 0.0, 1.0, self.variables,
-                                  "FRICTION_MULTIPLIER" , resolution=0.001)
+                                  "FRICTION_MULTIPLIER", resolution=0.001)
         self.create_slider_single(self.tab_physics, "Wall Default Push", 0.0, 10.0, self.variables, "WALL_DEFAULT_PUSH")
-
 
         self.create_slider_single(self.tab_visuals, "Visual Radius", 1, 20, self.variables, "VISUAL_RADIUS",
                                   is_int=True)
@@ -66,8 +67,15 @@ class Gui:
         self.create_slider_vector(self.tab_walls, "Wall point 2", -100.0, 3000,
                                   self.variables["WALL_POINT_2"], is_int=True)
 
+        self.window.after(100, self.sync_loop)
 
-
+    def sync_loop(self):
+        for slider, entry_var, target, key, is_dict in self.sync_elements:
+            current_val = target[key] if is_dict else getattr(target, key)
+            if abs(slider.get() - current_val) > 0.0001:
+                slider.set(current_val)
+                entry_var.set(str(current_val))
+        self.window.after(100, self.sync_loop)
 
     def run(self):
         self.window.mainloop()
@@ -111,6 +119,8 @@ class Gui:
             entry.bind("<Return>", on_entry_type)
             entry.bind("<FocusOut>", on_entry_type)
 
+            self.sync_elements.append((slider, entry_var, target_obj, axis, False))
+
         build_component('x')
         build_component('y')
 
@@ -147,6 +157,8 @@ class Gui:
         entry.pack(side=tk.RIGHT, padx=(10, 0), pady=(15, 0))
         entry.bind("<Return>", on_entry_type)
         entry.bind("<FocusOut>", on_entry_type)
+
+        self.sync_elements.append((slider, entry_var, target_dict, key, True))
 
     def create_trigger_button(self, parent, label, target_dict, key):
         button = tk.Button(
