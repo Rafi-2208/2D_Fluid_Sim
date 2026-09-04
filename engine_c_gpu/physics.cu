@@ -7,6 +7,7 @@ uint32_t *d_frame_buffer = nullptr;
 int current_frame_buffer_size = 0;
 int old_count = 0;
 int old_wall_count = 0;
+int old_total_areas = 0;
 
 void __global__ kernel_change_positions(particle_t *particles, const int count, const float delta_time,
                                         const wall_t *walls, const int wall_count,
@@ -312,12 +313,18 @@ EXPORT void update(particle_t *particles, const int count, float delta_time, con
     const int x_limit = (int) (map_size.x / max_influence_radius);
     const int y_limit = (int) (map_size.y / max_influence_radius);
     int total_areas = x_limit * y_limit;
-    if (d_particles == nullptr || count != old_count || walls.count != old_wall_count) {
+    if (d_particles == nullptr || count != old_count || walls.count != old_wall_count || total_areas != old_total_areas) {
+        if (d_particles != nullptr) {
+            cudaFree(d_particles);
+            cudaFree(d_walls);
+            cudaFree(d_areas);
+        }
         cudaMalloc((void **) &d_particles, count * sizeof(particle_t));
         cudaMalloc((void **) &d_walls, walls.count * sizeof(wall_t));
         cudaMalloc((void **) &d_areas, total_areas * sizeof(gpu_area_t));
         old_wall_count = walls.count;
         old_count = count;
+        old_total_areas = total_areas;
     }
     cudaMemcpy(d_particles, particles, count * sizeof(particle_t), cudaMemcpyHostToDevice);
     cudaMemcpy(d_walls, walls.walls, walls.count * sizeof(wall_t), cudaMemcpyHostToDevice);

@@ -37,6 +37,7 @@ class Gui:
                                   self.variables , "RANDOM_WALL_COUNT", is_int=True)
         self.create_slider_single(self.tab_spawn, "Random wall max len", 0.0, 2000.0,
                                   self.variables , "RANDOM_WALL_MAX_LEN", is_int=True)
+        self.create_slider_vector(self.tab_spawn, "Window size", 0.0, 3000.0, self.variables["NEW_MAP_SIZE"])
 
 
         self.create_slider_vector(self.tab_physics, "Gravity", -1000.0, 1000.0, self.variables["GRAVITY"])
@@ -60,9 +61,9 @@ class Gui:
 
         self.create_trigger_button(self.tab_walls, "Add Wall", self.variables, "ADD_WALL_CLICKED")
         self.create_trigger_button(self.tab_walls, "Remove Wall", self.variables, "REMOVE_WALL_CLICKED")
-        self.create_slider_vector(self.tab_walls, "Wall point 1", -100.0, 2500.0,
+        self.create_slider_vector(self.tab_walls, "Wall point 1", -100.0, 3000,
                                   self.variables["WALL_POINT_1"], is_int=True)
-        self.create_slider_vector(self.tab_walls, "Wall point 2", -100.0, 2500.0,
+        self.create_slider_vector(self.tab_walls, "Wall point 2", -100.0, 3000,
                                   self.variables["WALL_POINT_2"], is_int=True)
 
 
