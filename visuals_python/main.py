@@ -2,8 +2,10 @@
 import pygame
 from utility_functions import *
 from modifiable_variables import *
-from gui import start_gui_thread
-
+import os
+import platform
+import tkinter as tk
+from gui import Gui
 
 def initialize_vectors():
     VARIABLES["MAP_SIZE"] = Vector2D(VARIABLES["MAP_SIZE"][0], VARIABLES["MAP_SIZE"][1])
@@ -129,12 +131,15 @@ def extract_saved_walls(walls_array, obstacles):
     return saved_user_walls
 
 
-def handle_restart(walls_array, obstacles):
-    VARIABLES["MAP_SIZE"].x = VARIABLES["NEW_MAP_SIZE"].x
-    VARIABLES["MAP_SIZE"].y = VARIABLES["NEW_MAP_SIZE"].y
+def handle_restart(walls_array, obstacles, gui):
+    new_w, new_h = int(VARIABLES["NEW_MAP_SIZE"].x), int(VARIABLES["NEW_MAP_SIZE"].y)
+    VARIABLES["MAP_SIZE"].x = new_w
+    VARIABLES["MAP_SIZE"].y = new_h
+
+    gui.pygame_frame.config(width=new_w, height=new_h)
 
     areas_array = initialize_areas()
-    screen = pygame.display.set_mode((int(VARIABLES["MAP_SIZE"].x), int(VARIABLES["MAP_SIZE"].y)), pygame.RESIZABLE)
+    screen = pygame.display.set_mode((new_w, new_h))
 
     VARIABLES["PARTICLE_COUNT"] = int(VARIABLES["STARTING_PARTICLE_COUNT"])
     particles_array = initialize_particles(VARIABLES["PARTICLE_COUNT"])
@@ -207,25 +212,35 @@ def draw_screen(screen, particles_array, obstacles, fps_value, main_font):
 
 
 def main():
+    initialize_vectors()
+    walls_array, obstacles = initialize_walls()
+    areas_array = initialize_areas()
+    particles_array = initialize_particles(VARIABLES["MAX_PARTICLES"])
+    root = tk.Tk()
+    gui = Gui(VARIABLES, root)
+    root.update()
+    os.environ['SDL_WINDOWID'] = str(gui.pygame_frame.winfo_id())
+    if platform.system() == "Windows":
+        os.environ['SDL_VIDEODRIVER'] = 'windows'
     pygame.init()
     pygame.font.init()
 
     main_font = pygame.font.SysFont(None, 30)
     clock = pygame.time.Clock()
 
-    initialize_vectors()
-    walls_array, obstacles = initialize_walls()
-    areas_array = initialize_areas()
-    particles_array = initialize_particles(VARIABLES["MAX_PARTICLES"])
-
-    screen = pygame.display.set_mode((int(VARIABLES["MAP_SIZE"].x), int(VARIABLES["MAP_SIZE"].y)), pygame.RESIZABLE)
-    start_gui_thread(VARIABLES)
+    screen = pygame.display.set_mode((int(VARIABLES["MAP_SIZE"].x), int(VARIABLES["MAP_SIZE"].y)))
 
     running = True
 
     while running:
+        try:
+            root.update_idletasks()
+            root.update()
+        except tk.TclError:
+            running = False
+            break
         if VARIABLES["RESTART_CLICKED"]:
-            screen, areas_array, particles_array, walls_array, obstacles = handle_restart(walls_array, obstacles)
+            screen, areas_array, particles_array, walls_array, obstacles = handle_restart(walls_array, obstacles, gui)
 
         if VARIABLES["ADD_WALL_CLICKED"]:
             add_user_wall(walls_array, obstacles)
@@ -238,13 +253,6 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            elif event.type == pygame.VIDEORESIZE:
-                screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
-                VARIABLES["NEW_MAP_SIZE"].x = event.w
-                VARIABLES["NEW_MAP_SIZE"].y = event.h
-                VARIABLES["MAP_SIZE"].x = event.w
-                VARIABLES["MAP_SIZE"].y = event.h
-                VARIABLES["RESTART_CLICKED"] = True
 
         dt = clock.tick_busy_loop(60) / 1000.0
         fps_value = clock.get_fps()

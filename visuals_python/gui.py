@@ -1,18 +1,26 @@
 ﻿import tkinter as tk
 from tkinter import ttk
-import threading
+
 
 
 class Gui:
-    def __init__(self, variables):
+    def __init__(self, variables, root):
         self.variables = variables
-        self.window = tk.Tk()
-        self.window.title("Simulation Controls")
+        self.window = root
+        self.window.title("Simulation Controls & Display")
+
+        self.control_frame = tk.Frame(self.window, width=450)
+        self.control_frame.pack(side=tk.LEFT, fill=tk.Y)
+        self.control_frame.pack_propagate(False)
+
+        map_w, map_h = int(self.variables["MAP_SIZE"].x), int(self.variables["MAP_SIZE"].y)
+        self.pygame_frame = tk.Frame(self.window, width=map_w, height=map_h, bg='black')
+        self.pygame_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.sync_elements = []
 
-        self.notebook = ttk.Notebook(self.window)
-        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.notebook = ttk.Notebook(self.control_frame)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         self.tab_spawn = tk.Frame(self.notebook)
         self.tab_physics = tk.Frame(self.notebook)
@@ -40,7 +48,6 @@ class Gui:
                                   self.variables, "RANDOM_WALL_COUNT", is_int=True)
         self.create_slider_single(self.tab_spawn, "Random wall max len", 0.0, 2000.0,
                                   self.variables, "RANDOM_WALL_MAX_LEN", is_int=True)
-        self.create_slider_vector(self.tab_spawn, "Window size", 0.0, 3000.0, self.variables["NEW_MAP_SIZE"])
 
         self.create_slider_vector(self.tab_physics, "Gravity", -1000.0, 1000.0, self.variables["GRAVITY"])
         self.create_slider_single(self.tab_physics, "Max Influence Dist", 1, 100, self.variables,
@@ -68,6 +75,7 @@ class Gui:
                                   self.variables["WALL_POINT_2"], is_int=True)
 
         self.window.after(100, self.sync_loop)
+        self.pygame_frame.bind("<Configure>", self.on_resize)
 
     def sync_loop(self):
         for slider, entry_var, target, key, is_dict in self.sync_elements:
@@ -169,10 +177,11 @@ class Gui:
         button.pack(padx=20, pady=10, fill=tk.X)
         return button
 
-
-def start_gui_thread(variables):
-    def thread_target():
-        gui = Gui(variables)
-        gui.run()
-
-    threading.Thread(target=thread_target, daemon=True).start()
+    def on_resize(self, event):
+        if event.widget == self.pygame_frame:
+            current_x = int(self.variables["MAP_SIZE"].x)
+            current_y = int(self.variables["MAP_SIZE"].y)
+            if abs(event.width - current_x) > 2 or abs(event.height - current_y) > 2:
+                self.variables["NEW_MAP_SIZE"].x = event.width
+                self.variables["NEW_MAP_SIZE"].y = event.height
+                self.variables["RESTART_CLICKED"] = True
