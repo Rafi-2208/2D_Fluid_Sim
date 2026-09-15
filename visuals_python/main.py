@@ -1,4 +1,6 @@
 ﻿import random
+from fileinput import filename
+
 import pygame
 from utility_functions import *
 from modifiable_variables import *
@@ -6,6 +8,26 @@ import os
 import platform
 import tkinter as tk
 from gui import Gui
+import json
+
+
+def load_config(config_filename):
+    try:
+        file = open(config_filename, "r")
+        data = json.load(file)
+        file.close()
+        if set(data.keys()) != set(DEFAULT_VARIABLES.keys()):
+            return DEFAULT_VARIABLES.copy()
+        return data
+    except:
+        return DEFAULT_VARIABLES.copy()
+
+
+def save_config(config_filename):
+    file = open(config_filename, "w")
+    json.dump(VARIABLES, file)
+    file.close()
+
 
 def initialize_vectors():
     VARIABLES["MAP_SIZE"] = Vector2D(VARIABLES["MAP_SIZE"][0], VARIABLES["MAP_SIZE"][1])
@@ -19,6 +41,18 @@ def initialize_vectors():
     VARIABLES["STARTING_SPEED_Y"] = Vector2D(VARIABLES["STARTING_SPEED_Y"][0], VARIABLES["STARTING_SPEED_Y"][1])
     VARIABLES["WALL_POINT_1"] = Vector2D(VARIABLES["WALL_POINT_1"][0], VARIABLES["WALL_POINT_1"][1])
     VARIABLES["WALL_POINT_2"] = Vector2D(VARIABLES["WALL_POINT_2"][0], VARIABLES["WALL_POINT_2"][1])
+
+
+def reset_vectors():
+    VARIABLES["MAP_SIZE"] = (VARIABLES["MAP_SIZE"].x, VARIABLES["MAP_SIZE"].y)
+    VARIABLES["NEW_MAP_SIZE"] = (VARIABLES["NEW_MAP_SIZE"].x, VARIABLES["NEW_MAP_SIZE"].y)
+    VARIABLES["GRAVITY"] = (VARIABLES["GRAVITY"].x, VARIABLES["GRAVITY"].y)
+    VARIABLES["STARTING_POSITION_X"] = (VARIABLES["STARTING_POSITION_X"].x, VARIABLES["STARTING_POSITION_X"].y)
+    VARIABLES["STARTING_POSITION_Y"] = (VARIABLES["STARTING_POSITION_Y"].x, VARIABLES["STARTING_POSITION_Y"].y)
+    VARIABLES["STARTING_SPEED_X"] = (VARIABLES["STARTING_SPEED_X"].x, VARIABLES["STARTING_SPEED_X"].y)
+    VARIABLES["STARTING_SPEED_Y"] = (VARIABLES["STARTING_SPEED_Y"].x, VARIABLES["STARTING_SPEED_Y"].y)
+    VARIABLES["WALL_POINT_1"] = (0, 0)
+    VARIABLES["WALL_POINT_2"] = (0, 0)
 
 
 def initialize_walls(saved_user_walls=None):
@@ -212,25 +246,34 @@ def draw_screen(screen, particles_array, obstacles, fps_value, main_font):
 
 
 def main():
+    VARIABLES.update(load_config("config.json"))
     initialize_vectors()
     walls_array, obstacles = initialize_walls()
     areas_array = initialize_areas()
     particles_array = initialize_particles(VARIABLES["MAX_PARTICLES"])
+
     root = tk.Tk()
     gui = Gui(VARIABLES, root)
     root.update()
+
     os.environ['SDL_WINDOWID'] = str(gui.pygame_frame.winfo_id())
     if platform.system() == "Windows":
         os.environ['SDL_VIDEODRIVER'] = 'windows'
+
     pygame.init()
     pygame.font.init()
 
     main_font = pygame.font.SysFont(None, 30)
     clock = pygame.time.Clock()
-
     screen = pygame.display.set_mode((int(VARIABLES["MAP_SIZE"].x), int(VARIABLES["MAP_SIZE"].y)))
 
     running = True
+
+    def on_closing():
+        nonlocal running
+        running = False
+
+    root.protocol("WM_DELETE_WINDOW", on_closing)
 
     while running:
         try:
@@ -253,14 +296,17 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-
         dt = clock.tick_busy_loop(60) / 1000.0
         fps_value = clock.get_fps()
-
         update_physics(particles_array, obstacles, areas_array, dt)
         draw_screen(screen, particles_array, obstacles, fps_value, main_font)
-
+    reset_vectors()
+    save_config("config.json")
     pygame.quit()
+    try:
+        root.destroy()
+    except tk.TclError:
+        pass
 
 
 if __name__ == "__main__":
