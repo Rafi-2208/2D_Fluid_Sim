@@ -4,9 +4,11 @@ from tkinter import ttk
 
 
 class Gui:
-    def __init__(self, variables, root):
+    def __init__(self, variables, root, load_settings_callback, save_settings_callback):
         self.variables = variables
         self.window = root
+        self.load_settings_callback = load_settings_callback
+        self.save_settings_callback = save_settings_callback
         self.window.title("Simulation Controls & Display")
 
         self.control_frame = tk.Frame(self.window, width=450)
@@ -26,11 +28,13 @@ class Gui:
         self.tab_physics = tk.Frame(self.notebook)
         self.tab_visuals = tk.Frame(self.notebook)
         self.tab_walls = tk.Frame(self.notebook)
+        self.tab_settings = tk.Frame(self.notebook)
 
         self.notebook.add(self.tab_spawn, text="Spawning")
         self.notebook.add(self.tab_physics, text="Physics")
         self.notebook.add(self.tab_visuals, text="Visuals")
         self.notebook.add(self.tab_walls, text="Walls")
+        self.notebook.add(self.tab_settings, text="Settings")
 
         self.create_trigger_button(self.tab_spawn, "Restart Simulation", self.variables, "RESTART_CLICKED")
         self.create_slider_vector(self.tab_spawn, "Starting position X range", 0.0, 2000.0,
@@ -73,6 +77,23 @@ class Gui:
                                   self.variables["WALL_POINT_1"], is_int=True)
         self.create_slider_vector(self.tab_walls, "Wall point 2", -100.0, 3000,
                                   self.variables["WALL_POINT_2"], is_int=True)
+        self.settings_filename = {}
+        self.create_text_input(self.tab_settings, "Settings filename", self.settings_filename, "filename")
+
+        self.create_trigger_button(
+            self.tab_settings,
+            "Load",
+            self.settings_filename,
+            "filename",
+            command=lambda: self.load_settings_callback(self.settings_filename["filename"])
+        )
+        self.create_trigger_button(
+            self.tab_settings,
+            "Save",
+            self.settings_filename,
+            "filename",
+            command=lambda: self.save_settings_callback(self.settings_filename["filename"])
+        )
 
         self.window.after(100, self.sync_loop)
         self.pygame_frame.bind("<Configure>", self.on_resize)
@@ -168,14 +189,35 @@ class Gui:
 
         self.sync_elements.append((slider, entry_var, target_dict, key, True))
 
-    def create_trigger_button(self, parent, label, target_dict, key):
+    def create_trigger_button(self, parent, label, target_dict, key, command=None):
+        if command is None:
+            command = lambda: target_dict.update({key: True})
+
         button = tk.Button(
             parent, text=label,
-            command=lambda: target_dict.update({key: True}),
+            command=command,
             bg="#d9534f", fg="white", font=("Arial", 10, "bold")
         )
         button.pack(padx=20, pady=10, fill=tk.X)
         return button
+
+    def create_text_input(self, parent, label, target_dict, key):
+        frame = tk.Frame(parent)
+        frame.pack(padx=20, pady=2, fill=tk.X)
+
+        tk.Label(frame, text=label).pack(anchor=tk.W)
+        entry_var = tk.StringVar(value="config.json")
+        entry = tk.Entry(frame, textvariable=entry_var)
+        entry.pack(fill=tk.X, pady=(2, 10))
+
+        target_dict[key] = "config.json"
+
+        def on_entry_type(event=None):
+            target_dict[key] = entry_var.get()
+
+        entry.bind("<Return>", on_entry_type)
+        entry.bind("<FocusOut>", on_entry_type)
+        return entry_var
 
     def on_resize(self, event):
         if event.widget == self.pygame_frame:

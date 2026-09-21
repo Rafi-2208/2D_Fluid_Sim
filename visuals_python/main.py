@@ -13,20 +13,35 @@ import json
 
 def load_config(config_filename):
     try:
-        file = open(config_filename, "r")
-        data = json.load(file)
-        file.close()
-        if set(data.keys()) != set(DEFAULT_VARIABLES.keys()):
-            return DEFAULT_VARIABLES.copy()
-        return data
-    except:
+        with open(config_filename, "r") as file:
+            data = json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
         return DEFAULT_VARIABLES.copy()
+    if not isinstance(data, dict) or set(data.keys()) != set(DEFAULT_VARIABLES.keys()):
+        return DEFAULT_VARIABLES.copy()
+    return data
 
 
 def save_config(config_filename):
-    file = open(config_filename, "w")
-    json.dump(VARIABLES, file)
-    file.close()
+    config_data = VARIABLES.copy()
+    for key, value in config_data.items():
+        if hasattr(value, "x") and hasattr(value, "y"):
+            config_data[key] = (value.x, value.y)
+
+    with open(config_filename, "w") as file:
+        json.dump(config_data, file)
+
+
+def apply_config(config_filename):
+    loaded_variables = load_config(config_filename)
+    for key, value in loaded_variables.items():
+        current_value = VARIABLES.get(key)
+        if hasattr(current_value, "x") and hasattr(current_value, "y"):
+            current_value.x = value[0]
+            current_value.y = value[1]
+        else:
+            VARIABLES[key] = value
+    VARIABLES["RESTART_CLICKED"] = True
 
 
 def initialize_vectors():
@@ -253,7 +268,12 @@ def main():
     particles_array = initialize_particles(VARIABLES["MAX_PARTICLES"])
 
     root = tk.Tk()
-    gui = Gui(VARIABLES, root)
+    gui = Gui(
+        VARIABLES,
+        root,
+        apply_config,
+        save_config
+    )
     root.update()
 
     os.environ['SDL_WINDOWID'] = str(gui.pygame_frame.winfo_id())
