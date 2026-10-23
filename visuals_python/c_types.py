@@ -1,7 +1,6 @@
 import ctypes
 from modifiable_variables import *
 import os
-
 class Vector2D(ctypes.Structure):
     _fields_ = [
         ("x", ctypes.c_float),

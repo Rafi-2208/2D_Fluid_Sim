@@ -13,6 +13,10 @@ set(CMAKE_CUDA_ARCHITECTURES "75;80;86;89")
 
 add_library(engine_c_gpu SHARED physics.cu definitions.h)
 
+target_compile_options(engine_c_gpu PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/MT$<$<CONFIG:Debug>:d>>
+        $<$<COMPILE_LANGUAGE:CXX>:/MT$<$<CONFIG:Debug>:d>>
+)
 
 add_custom_command(TARGET engine_c_gpu POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
