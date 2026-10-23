@@ -21,7 +21,7 @@ DEFAULT_VARIABLES = {
     "RANDOM_WALL_MAX_LEN": 1000,
     "WALL_DEFAULT_PUSH": 2,
     "VISUAL_COLOUR": 1,
-    "RENDERING": 2,
+    "RENDERING": "auto",
     "SUB_STEPS": 3,
     "FPS_COUNTER": False,
     "RESTART_CLICKED": False,
@@ -59,7 +59,7 @@ VARIABLES = {
     "RANDOM_WALL_MAX_LEN": 1000,
     "WALL_DEFAULT_PUSH": 2,
     "VISUAL_COLOUR": 1,
-    "RENDERING": 2,
+    "RENDERING": "auto",
     "SUB_STEPS": 3,
     "FPS_COUNTER": False,
     "RESTART_CLICKED": False,
@@ -74,4 +74,3 @@ VARIABLES = {
     "MAX_PARTICLES" : 200000,
     "MAX_WALLS": 100,
 }
-

@@ -19,6 +19,8 @@ def load_config(config_filename):
         return DEFAULT_VARIABLES.copy()
     if not isinstance(data, dict) or set(data.keys()) != set(DEFAULT_VARIABLES.keys()):
         return DEFAULT_VARIABLES.copy()
+    if data["RENDERING"] == 2:
+        data["RENDERING"] = "auto"
     return data
 
 
@@ -208,7 +210,7 @@ def update_physics(particles_array, obstacles, areas_array, dt):
     friction_split_timing = VARIABLES["FRICTION_MULTIPLIER"] ** (1.0 / VARIABLES["SUB_STEPS"])
     wall_push_split_timing = VARIABLES["WALL_DEFAULT_PUSH"] / VARIABLES["SUB_STEPS"]
 
-    engine.update(
+    get_engine().update(
         ctypes.cast(particles_array, ctypes.POINTER(Particle)),
         VARIABLES["PARTICLE_COUNT"],
         dt,
@@ -236,7 +238,7 @@ def draw_screen(screen, particles_array, obstacles, fps_value, main_font):
     view = memoryview(screen.get_view('1'))
     buffer_array = (ctypes.c_uint32 * (len(view) // 4)).from_buffer(view)
 
-    engine.drawing(
+    get_engine().drawing(
         ctypes.cast(particles_array, ctypes.POINTER(Particle)),
         VARIABLES["PARTICLE_COUNT"],
         ctypes.byref(obstacles),
@@ -262,6 +264,7 @@ def draw_screen(screen, particles_array, obstacles, fps_value, main_font):
 
 def main():
     VARIABLES.update(load_config("config.json"))
+    initialize_engine()
     initialize_vectors()
     walls_array, obstacles = initialize_walls()
     areas_array = initialize_areas()
@@ -303,6 +306,7 @@ def main():
             running = False
             break
         if VARIABLES["RESTART_CLICKED"]:
+            initialize_engine()
             screen, areas_array, particles_array, walls_array, obstacles = handle_restart(walls_array, obstacles, gui)
 
         if VARIABLES["ADD_WALL_CLICKED"]:

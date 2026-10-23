@@ -65,11 +65,17 @@ class Gui:
         self.create_slider_single(self.tab_physics, "Friction Multiplier", 0.0, 1.0, self.variables,
                                   "FRICTION_MULTIPLIER", resolution=0.001)
         self.create_slider_single(self.tab_physics, "Wall Default Push", 0.0, 10.0, self.variables, "WALL_DEFAULT_PUSH")
+        self.create_slider_single(self.tab_physics, "Simulation substeps", 1, 20, self.variables,
+                                  "SUB_STEPS", is_int=True)
+
+
 
         self.create_slider_single(self.tab_visuals, "Visual Radius", 1, 20, self.variables, "VISUAL_RADIUS",
                                   is_int=True)
         self.create_slider_single(self.tab_visuals, "Visual Color Mult", 10000, 500000, self.variables,
                                   "VISUAL_COLOUR_PRESSURE_MULTIPLIER", is_int=True)
+
+
 
         self.create_trigger_button(self.tab_walls, "Add Wall", self.variables, "ADD_WALL_CLICKED")
         self.create_trigger_button(self.tab_walls, "Remove Wall", self.variables, "REMOVE_WALL_CLICKED")
@@ -77,6 +83,9 @@ class Gui:
                                   self.variables["WALL_POINT_1"], is_int=True)
         self.create_slider_vector(self.tab_walls, "Wall point 2", -100.0, 3000,
                                   self.variables["WALL_POINT_2"], is_int=True)
+
+
+
         self.settings_filename = {}
         self.create_text_input(self.tab_settings, "Settings filename", self.settings_filename, "filename")
 
@@ -94,6 +103,8 @@ class Gui:
             "filename",
             command=lambda: self.save_settings_callback(self.settings_filename["filename"])
         )
+
+
 
         self.window.after(100, self.sync_loop)
         self.pygame_frame.bind("<Configure>", self.on_resize)
