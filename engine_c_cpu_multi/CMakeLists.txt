@@ -7,9 +7,7 @@ add_library(engine_c SHARED physics.c
         definitions.h
 )
 target_compile_options(engine_c PRIVATE -fopenmp)
-target_link_options(engine_c PRIVATE -fopenmp)
-find_package(OpenMP REQUIRED)
-target_link_libraries(engine_c PRIVATE OpenMP::OpenMP_C)
+target_link_options(engine_c PRIVATE -fopenmp -static)
 
 
 add_custom_command(TARGET engine_c POST_BUILD

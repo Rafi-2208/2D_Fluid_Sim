@@ -1,14 +1,6 @@
-﻿import ctypes
-import os
+import ctypes
 from modifiable_variables import *
-
-
-_dll_directory_handle = None
-if os.name == "nt":
-    dll_directory = VARIABLES.get("MINGW_DLL_DIRECTORY")
-    if dll_directory and os.path.isdir(dll_directory):
-        _dll_directory_handle = os.add_dll_directory(dll_directory)
-
+import os
 
 class Vector2D(ctypes.Structure):
     _fields_ = [

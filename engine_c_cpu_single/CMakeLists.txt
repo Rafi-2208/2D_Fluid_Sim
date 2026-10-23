@@ -6,6 +6,7 @@ set(CMAKE_C_STANDARD 11)
 add_library(engine_c SHARED physics.c
         definitions.h
 )
+target_link_options(engine_c PRIVATE -static)
 
 add_custom_command(TARGET engine_c POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
