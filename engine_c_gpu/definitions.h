@@ -89,5 +89,7 @@ __global__ void kernel_drawing_walls(wall_t *walls, int wall_count, vector2D_t s
 EXPORT void drawing(particle_t *particles, const int count, obstacles_t *walls, const int radius,
                     const vector2D_t screen_size, uint32_t *frame_buffer, const int colour_type, const int pitch,
                     const float visual_pressure_multiplier);
+typedef void (*engine_log_callback_t)(int level, const char *component, const char *message);
+EXPORT void set_log_callback(engine_log_callback_t callback);
 
 #endif //ENGINE_C_DEFINITIONS_H

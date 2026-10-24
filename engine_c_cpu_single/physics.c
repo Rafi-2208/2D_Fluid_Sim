@@ -1,12 +1,37 @@
 #include "definitions.h"
 #include <math.h>
 #include <stdio.h>
+#include <stdarg.h>
 
+static engine_log_callback_t log_callback = NULL;
+
+EXPORT void set_log_callback(engine_log_callback_t callback) {
+    log_callback = callback;
+}
+
+static void native_log(int level, const char *format, ...) {
+    if (log_callback == NULL) {
+        return;
+    }
+    char message[512];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(message, sizeof(message), format, args);
+    va_end(args);
+    log_callback(level, "CPU", message);
+}
 
 EXPORT void update(particle_t *particles, const int count, float delta_time, const vector2D_t gravity_force,
                    const obstacles_t walls, const int collision_limit, const float max_influence_radius,
                    const float target_density, const float pressure_multiplier, const float collision_dampening,
                    const float viscosity, const vector2D_t map_size, area_t *areas, const float friction_multiplier , float wall_default_push , int substeps) {
+    if (particles == NULL || count < 0 || areas == NULL || substeps <= 0 ||
+        max_influence_radius <= 0 || map_size.x <= 0 || map_size.y <= 0 ||
+        walls.count < 0 || (walls.count > 0 && walls.walls == NULL)) {
+        native_log(3, "update rejected invalid arguments: particles=%p count=%d areas=%p substeps=%d walls=%d",
+                   (void *) particles, count, (void *) areas, substeps, walls.count);
+        return;
+    }
     delta_time = delta_time / substeps;
     for (int i = 0; i < substeps; i++) {
         area_segregation(particles, count, areas, max_influence_radius, map_size);
@@ -282,6 +307,13 @@ void area_segregation(particle_t *particles, const int count, area_t *areas, con
 EXPORT void drawing(particle_t *particles, const int count, obstacles_t *walls, const int radius,
                     const vector2D_t screen_size, uint32_t *frame_buffer, const int colour_type, const int pitch,
                     const float visual_pressure_multiplier) {
+    if (particles == NULL || count < 0 || walls == NULL || walls->count < 0 ||
+        (walls->count > 0 && walls->walls == NULL) || frame_buffer == NULL || radius < 0 ||
+        screen_size.x <= 0 || screen_size.y <= 0 || pitch <= 0 || visual_pressure_multiplier == 0) {
+        native_log(3, "drawing rejected invalid arguments: particles=%p count=%d walls=%p frame_buffer=%p pitch=%d",
+                   (void *) particles, count, (void *) walls, (void *) frame_buffer, pitch);
+        return;
+    }
     drawing_particles(particles, count, radius, screen_size, frame_buffer, colour_type, pitch,
                       visual_pressure_multiplier);
     drawing_walls(walls, screen_size, frame_buffer, pitch);
@@ -368,4 +400,3 @@ void drawing_walls(obstacles_t *walls, vector2D_t screen_size, uint32_t *frame_b
         }
     }
 }
-

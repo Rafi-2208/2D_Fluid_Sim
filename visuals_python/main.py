@@ -6,21 +6,34 @@ from utility_functions import *
 from modifiable_variables import *
 import os
 import platform
+import time
 import tkinter as tk
+from tkinter import messagebox
 from gui import Gui
 import json
+
+from app_logging import APP_LOGGER, configure_logging
+from c_types import get_engine_mode, get_engine_name
 
 
 def load_config(config_filename):
     try:
         with open(config_filename, "r") as file:
             data = json.load(file)
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+    except FileNotFoundError:
+        APP_LOGGER.info("Config file %s not found; using defaults", config_filename)
+        return DEFAULT_VARIABLES.copy()
+    except json.JSONDecodeError:
+        APP_LOGGER.warning("Config file %s contains invalid JSON; using defaults", config_filename,
+                           exc_info=True)
+        return DEFAULT_VARIABLES.copy()
+    except OSError:
+        APP_LOGGER.exception("Could not read config file %s; using defaults", config_filename)
         return DEFAULT_VARIABLES.copy()
     if not isinstance(data, dict) or set(data.keys()) != set(DEFAULT_VARIABLES.keys()):
+        APP_LOGGER.warning("Config file %s has an unexpected structure; using defaults", config_filename)
         return DEFAULT_VARIABLES.copy()
-    if data["RENDERING"] == 2:
-        data["RENDERING"] = "auto"
+    APP_LOGGER.info("Loaded config from %s", config_filename)
     return data
 
 
@@ -32,6 +45,7 @@ def save_config(config_filename):
 
     with open(config_filename, "w") as file:
         json.dump(config_data, file)
+    APP_LOGGER.info("Saved config to %s", config_filename)
 
 
 def apply_config(config_filename):
@@ -44,6 +58,7 @@ def apply_config(config_filename):
         else:
             VARIABLES[key] = value
     VARIABLES["RESTART_CLICKED"] = True
+    APP_LOGGER.info("Applied config from %s; simulation restart requested", config_filename)
 
 
 def initialize_vectors():
@@ -230,6 +245,25 @@ def update_physics(particles_array, obstacles, areas_array, dt):
     )
 
 
+def log_simulation_settings(obstacles):
+    APP_LOGGER.info(
+        "Simulation settings: engine=%s map=%sx%s particles=%d max_particles=%d walls=%d "
+        "substeps=%d influence_radius=%s target_density=%s pressure_multiplier=%s gravity=(%s,%s)",
+        get_engine_name(),
+        VARIABLES["MAP_SIZE"].x,
+        VARIABLES["MAP_SIZE"].y,
+        VARIABLES["PARTICLE_COUNT"],
+        VARIABLES["MAX_PARTICLES"],
+        obstacles.count,
+        VARIABLES["SUB_STEPS"],
+        VARIABLES["MAX_INFLUENCE_DISTANCE"],
+        VARIABLES["TARGET_DENSITY"],
+        VARIABLES["PRESSURE_MULTIPLIER"],
+        VARIABLES["GRAVITY"].x,
+        VARIABLES["GRAVITY"].y,
+    )
+
+
 def draw_screen(screen, particles_array, obstacles, fps_value, main_font):
     screen.fill((0, 0, 0))
     screen.lock()
@@ -263,12 +297,15 @@ def draw_screen(screen, particles_array, obstacles, fps_value, main_font):
 
 
 def main():
+    configure_logging()
+    APP_LOGGER.info("Application starting")
     VARIABLES.update(load_config("config.json"))
     initialize_engine()
     initialize_vectors()
     walls_array, obstacles = initialize_walls()
     areas_array = initialize_areas()
     particles_array = initialize_particles(VARIABLES["MAX_PARTICLES"])
+    log_simulation_settings(obstacles)
 
     root = tk.Tk()
     gui = Gui(
@@ -291,9 +328,14 @@ def main():
     screen = pygame.display.set_mode((int(VARIABLES["MAP_SIZE"].x), int(VARIABLES["MAP_SIZE"].y)))
 
     running = True
+    summary_started = time.monotonic()
+    summary_frame_count = 0
+    summary_frame_time = 0.0
+    summary_max_frame_time = 0.0
 
     def on_closing():
         nonlocal running
+        APP_LOGGER.info("Window close requested")
         running = False
 
     root.protocol("WM_DELETE_WINDOW", on_closing)
@@ -303,18 +345,37 @@ def main():
             root.update_idletasks()
             root.update()
         except tk.TclError:
+            APP_LOGGER.info("GUI window closed")
             running = False
             break
         if VARIABLES["RESTART_CLICKED"]:
-            initialize_engine()
+            APP_LOGGER.info("Simulation restart requested")
+            try:
+                initialize_engine()
+            except (OSError, ValueError) as error:
+                APP_LOGGER.exception("Could not switch to the requested simulation engine")
+                messagebox.showerror("Engine selection failed", str(error), parent=root)
+                active_engine_mode = get_engine_mode()
+                VARIABLES["RENDERING"] = active_engine_mode if active_engine_mode is not None else "auto"
             screen, areas_array, particles_array, walls_array, obstacles = handle_restart(walls_array, obstacles, gui)
+            log_simulation_settings(obstacles)
 
         if VARIABLES["ADD_WALL_CLICKED"]:
+            previous_wall_count = obstacles.count
             add_user_wall(walls_array, obstacles)
+            if obstacles.count > previous_wall_count:
+                APP_LOGGER.info("User added a wall; wall_count=%d", obstacles.count)
+            else:
+                APP_LOGGER.warning("User wall could not be added; maximum wall count reached")
             VARIABLES["ADD_WALL_CLICKED"] = False
 
         if VARIABLES["REMOVE_WALL_CLICKED"]:
+            previous_wall_count = obstacles.count
             remove_user_wall(obstacles)
+            if obstacles.count < previous_wall_count:
+                APP_LOGGER.info("User removed a wall; wall_count=%d", obstacles.count)
+            else:
+                APP_LOGGER.warning("User wall could not be removed; no user-created walls remain")
             VARIABLES["REMOVE_WALL_CLICKED"] = False
 
         for event in pygame.event.get():
@@ -322,16 +383,46 @@ def main():
                 running = False
         dt = clock.tick_busy_loop(60) / 1000.0
         fps_value = clock.get_fps()
+        frame_started = time.perf_counter()
         update_physics(particles_array, obstacles, areas_array, dt)
         draw_screen(screen, particles_array, obstacles, fps_value, main_font)
+        frame_time = time.perf_counter() - frame_started
+        summary_frame_count += 1
+        summary_frame_time += frame_time
+        summary_max_frame_time = max(summary_max_frame_time, frame_time)
+        summary_elapsed = time.monotonic() - summary_started
+        if summary_elapsed >= 60.0:
+            average_fps = summary_frame_count / summary_elapsed
+            average_frame_ms = summary_frame_time / summary_frame_count * 1000.0
+            APP_LOGGER.info(
+                "Simulation summary: avg_fps=%.2f avg_frame_ms=%.2f max_frame_ms=%.2f "
+                "engine=%s particles=%d walls=%d substeps=%d",
+                average_fps,
+                average_frame_ms,
+                summary_max_frame_time * 1000.0,
+                get_engine_name(),
+                VARIABLES["PARTICLE_COUNT"],
+                obstacles.count,
+                VARIABLES["SUB_STEPS"],
+            )
+            summary_started = time.monotonic()
+            summary_frame_count = 0
+            summary_frame_time = 0.0
+            summary_max_frame_time = 0.0
+    APP_LOGGER.info("Application shutting down")
     reset_vectors()
     save_config("config.json")
     pygame.quit()
     try:
         root.destroy()
     except tk.TclError:
-        pass
+        APP_LOGGER.debug("GUI window was already destroyed")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        configure_logging()
+        APP_LOGGER.exception("Unhandled application error")
+        raise

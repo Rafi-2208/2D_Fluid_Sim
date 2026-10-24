@@ -9,6 +9,14 @@ class Gui:
         self.window = root
         self.load_settings_callback = load_settings_callback
         self.save_settings_callback = save_settings_callback
+        self.engine_options = {
+            "Automatic": "auto",
+            "CPU (single-core)": 0,
+            "CPU (multi-core)": 1,
+            "NVIDIA GPU": 2,
+        }
+        self.engine_option_labels = {mode: label for label, mode in self.engine_options.items()}
+        self.engine_selection_pending = False
         self.window.title("Simulation Controls & Display")
 
         self.control_frame = tk.Frame(self.window, width=450)
@@ -30,13 +38,19 @@ class Gui:
         self.tab_walls = tk.Frame(self.notebook)
         self.tab_settings = tk.Frame(self.notebook)
 
-        self.notebook.add(self.tab_spawn, text="Spawning")
+        self.notebook.add(self.tab_spawn, text="Restart Settings")
         self.notebook.add(self.tab_physics, text="Physics")
         self.notebook.add(self.tab_visuals, text="Visuals")
         self.notebook.add(self.tab_walls, text="Walls")
         self.notebook.add(self.tab_settings, text="Settings")
 
-        self.create_trigger_button(self.tab_spawn, "Restart Simulation", self.variables, "RESTART_CLICKED")
+        self.create_trigger_button(
+            self.tab_spawn,
+            "Restart Simulation",
+            self.variables,
+            "RESTART_CLICKED",
+            command=self.restart_simulation,
+        )
         self.create_slider_vector(self.tab_spawn, "Starting position X range", 0.0, 2000.0,
                                   self.variables["STARTING_POSITION_X"], is_int=True)
         self.create_slider_vector(self.tab_spawn, "Starting position Y range", 0.0, 1100.0,
@@ -52,7 +66,6 @@ class Gui:
                                   self.variables, "RANDOM_WALL_COUNT", is_int=True)
         self.create_slider_single(self.tab_spawn, "Random wall max len", 0.0, 2000.0,
                                   self.variables, "RANDOM_WALL_MAX_LEN", is_int=True)
-
         self.create_slider_vector(self.tab_physics, "Gravity", -1000.0, 1000.0, self.variables["GRAVITY"])
         self.create_slider_single(self.tab_physics, "Max Influence Dist", 1, 100, self.variables,
                                   "MAX_INFLUENCE_DISTANCE")
@@ -74,6 +87,37 @@ class Gui:
                                   is_int=True)
         self.create_slider_single(self.tab_visuals, "Visual Color Mult", 10000, 500000, self.variables,
                                   "VISUAL_COLOUR_PRESSURE_MULTIPLIER", is_int=True)
+
+        self.colour_options = {
+            "Blue to red": 0,
+            "Light blue to dark blue": 1,
+        }
+        self.colour_option_labels = {mode: label for label, mode in self.colour_options.items()}
+        colour_frame = tk.Frame(self.tab_visuals)
+        colour_frame.pack(padx=20, pady=6, fill=tk.X)
+        tk.Label(colour_frame, text="Particle color gradient").pack(anchor=tk.W)
+        current_colour = self.variables.get("VISUAL_COLOUR", 0)
+        if current_colour not in self.colour_option_labels:
+            current_colour = 0
+            self.variables["VISUAL_COLOUR"] = current_colour
+        self.colour_selection = tk.StringVar(value=self.colour_option_labels[current_colour])
+        self.colour_selector = ttk.Combobox(
+            colour_frame,
+            textvariable=self.colour_selection,
+            values=list(self.colour_options),
+            state="readonly",
+        )
+        self.colour_selector.pack(fill=tk.X, pady=(2, 0))
+        self.colour_selector.bind("<<ComboboxSelected>>", self.on_colour_selected)
+
+        self.fps_selection = tk.BooleanVar(value=bool(self.variables.get("FPS_COUNTER", False)))
+        self.fps_checkbox = ttk.Checkbutton(
+            self.tab_visuals,
+            text="Show FPS counter",
+            variable=self.fps_selection,
+            command=self.on_fps_toggled,
+        )
+        self.fps_checkbox.pack(padx=20, pady=6, anchor=tk.W)
 
 
 
@@ -104,7 +148,21 @@ class Gui:
             command=lambda: self.save_settings_callback(self.settings_filename["filename"])
         )
 
-
+        engine_frame = tk.Frame(self.tab_spawn)
+        engine_frame.pack(padx=20, pady=8, fill=tk.X)
+        tk.Label(engine_frame, text="Simulation engine").pack(anchor=tk.W)
+        current_engine = self.variables.get("RENDERING", "auto")
+        if current_engine not in self.engine_option_labels:
+            current_engine = "auto"
+        self.engine_selection = tk.StringVar(value=self.engine_option_labels[current_engine])
+        self.engine_selector = ttk.Combobox(
+            engine_frame,
+            textvariable=self.engine_selection,
+            values=list(self.engine_options),
+            state="readonly",
+        )
+        self.engine_selector.pack(fill=tk.X, pady=(2, 0))
+        self.engine_selector.bind("<<ComboboxSelected>>", self.on_engine_selected)
 
         self.window.after(100, self.sync_loop)
         self.pygame_frame.bind("<Configure>", self.on_resize)
@@ -115,7 +173,37 @@ class Gui:
             if abs(slider.get() - current_val) > 0.0001:
                 slider.set(current_val)
                 entry_var.set(str(current_val))
+        current_engine = self.variables.get("RENDERING", "auto")
+        if not self.engine_selection_pending and current_engine in self.engine_option_labels:
+            option_label = self.engine_option_labels[current_engine]
+            if self.engine_selection.get() != option_label:
+                self.engine_selection.set(option_label)
+        current_colour = self.variables.get("VISUAL_COLOUR", 0)
+        if current_colour in self.colour_option_labels:
+            colour_label = self.colour_option_labels[current_colour]
+            if self.colour_selection.get() != colour_label:
+                self.colour_selection.set(colour_label)
+        current_fps_setting = bool(self.variables.get("FPS_COUNTER", False))
+        if self.fps_selection.get() != current_fps_setting:
+            self.fps_selection.set(current_fps_setting)
         self.window.after(100, self.sync_loop)
+
+    def on_engine_selected(self, event=None):
+        self.engine_selection_pending = (
+            self.engine_options[self.engine_selection.get()] != self.variables.get("RENDERING", "auto")
+        )
+
+    def restart_simulation(self):
+        selected_engine = self.engine_options[self.engine_selection.get()]
+        self.variables["RENDERING"] = selected_engine
+        self.engine_selection_pending = False
+        self.variables["RESTART_CLICKED"] = True
+
+    def on_colour_selected(self, event=None):
+        self.variables["VISUAL_COLOUR"] = self.colour_options[self.colour_selection.get()]
+
+    def on_fps_toggled(self):
+        self.variables["FPS_COUNTER"] = self.fps_selection.get()
 
     def run(self):
         self.window.mainloop()

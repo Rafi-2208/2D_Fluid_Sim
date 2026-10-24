@@ -1,10 +1,44 @@
 #include "definitions.h"
 #include <cuda_runtime.h>
+#include <cstdarg>
+#include <cstdio>
+#include <cstddef>
+
+static engine_log_callback_t log_callback = nullptr;
+
+EXPORT void set_log_callback(engine_log_callback_t callback) {
+    log_callback = callback;
+}
+
+static void native_log(int level, const char *component, const char *format, ...) {
+    if (log_callback == nullptr) {
+        return;
+    }
+    char message[512];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(message, sizeof(message), format, args);
+    va_end(args);
+    log_callback(level, component, message);
+}
+
+static bool check_cuda(cudaError_t status, const char *operation) {
+    if (status == cudaSuccess) {
+        return true;
+    }
+    native_log(3, "CUDA", "%s failed: %s", operation, cudaGetErrorString(status));
+    return false;
+}
+
+static bool check_kernel_launch(const char *operation) {
+    return check_cuda(cudaGetLastError(), operation);
+}
+
 particle_t *d_particles = nullptr;
 wall_t *d_walls = nullptr;
 gpu_area_t *d_areas = nullptr;
 uint32_t *d_frame_buffer = nullptr;
-int current_frame_buffer_size = 0;
+size_t current_frame_buffer_size = 0;
 int old_count = 0;
 int old_wall_count = 0;
 int old_total_areas = 0;
@@ -176,7 +210,9 @@ void __global__ kernel_calculate_forces(particle_t *particles, const int count, 
                     neighbor_y >= 0 && neighbor_y < y_limit) {
                     const int cell_index = neighbor_y * x_limit + neighbor_x;
                     int limit = areas[cell_index].count;
-                    if (limit > MAX_PARTICLES_PER_AREA) limit = MAX_PARTICLES_PER_AREA;
+                    if (limit > MAX_PARTICLES_PER_AREA) {
+                        limit = MAX_PARTICLES_PER_AREA;
+                    }
                     for (int j = 0; j < limit; j++) {
                         int neighbor_id = areas[cell_index].particle_indexes[j];
                         if (i != neighbor_id) {
@@ -309,46 +345,99 @@ EXPORT void update(particle_t *particles, const int count, float delta_time, con
                    const float viscosity, const vector2D_t map_size, area_t *areas, const float friction_multiplier,
                    float wall_default_push , int substeps) {
 
-    
+    if (count < 0 || (count > 0 && particles == nullptr) || areas == nullptr || substeps <= 0 ||
+        max_influence_radius <= 0 || map_size.x <= 0 || map_size.y <= 0 ||
+        walls.count < 0 || (walls.count > 0 && walls.walls == nullptr)) {
+        native_log(3, "CUDA", "update rejected invalid arguments: count=%d substeps=%d walls=%d",
+                   count, substeps, walls.count);
+        return;
+    }
     const int x_limit = (int) (map_size.x / max_influence_radius);
     const int y_limit = (int) (map_size.y / max_influence_radius);
     int total_areas = x_limit * y_limit;
+    if (total_areas <= 0) {
+        native_log(3, "CUDA", "update rejected invalid area grid: x=%d y=%d", x_limit, y_limit);
+        return;
+    }
     if (d_particles == nullptr || count != old_count || walls.count != old_wall_count || total_areas != old_total_areas) {
         if (d_particles != nullptr) {
-            cudaFree(d_particles);
-            cudaFree(d_walls);
-            cudaFree(d_areas);
+            check_cuda(cudaFree(d_particles), "cudaFree(d_particles)");
+            check_cuda(cudaFree(d_walls), "cudaFree(d_walls)");
+            check_cuda(cudaFree(d_areas), "cudaFree(d_areas)");
+            d_particles = nullptr;
+            d_walls = nullptr;
+            d_areas = nullptr;
         }
-        cudaMalloc((void **) &d_particles, count * sizeof(particle_t));
-        cudaMalloc((void **) &d_walls, walls.count * sizeof(wall_t));
-        cudaMalloc((void **) &d_areas, total_areas * sizeof(gpu_area_t));
+        const size_t particle_buffer_size = (size_t) (count > 0 ? count : 1) * sizeof(particle_t);
+        const size_t wall_buffer_size = (size_t) (walls.count > 0 ? walls.count : 1) * sizeof(wall_t);
+        if (!check_cuda(cudaMalloc((void **) &d_particles, particle_buffer_size),
+                        "cudaMalloc(d_particles)")) {
+            return;
+        }
+        if (!check_cuda(cudaMalloc((void **) &d_walls, wall_buffer_size),
+                        "cudaMalloc(d_walls)")) {
+            return;
+        }
+        if (!check_cuda(cudaMalloc((void **) &d_areas, total_areas * sizeof(gpu_area_t)),
+                        "cudaMalloc(d_areas)")) {
+            return;
+        }
         old_wall_count = walls.count;
         old_count = count;
         old_total_areas = total_areas;
     }
-    cudaMemcpy(d_particles, particles, count * sizeof(particle_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_walls, walls.walls, walls.count * sizeof(wall_t), cudaMemcpyHostToDevice);
+    if (count > 0 &&
+        !check_cuda(cudaMemcpy(d_particles, particles, count * sizeof(particle_t), cudaMemcpyHostToDevice),
+                    "cudaMemcpy(particles host-to-device)")) {
+        return;
+    }
+    if (walls.count > 0 &&
+        !check_cuda(cudaMemcpy(d_walls, walls.walls, walls.count * sizeof(wall_t), cudaMemcpyHostToDevice),
+                    "cudaMemcpy(walls host-to-device)")) {
+        return;
+    }
+    if (count == 0) {
+        return;
+    }
     int threads = 256;
     int blocks = (count + threads - 1) / threads;
     int area_blocks = (total_areas + threads - 1) / threads;
     delta_time = delta_time / (float)substeps;
     for (int i = 0; i < substeps; i++) {
         kernel_clear_grid<<<area_blocks , threads>>>(d_areas, total_areas);
+        if (!check_kernel_launch("kernel_clear_grid launch")) {
+            return;
+        }
         kernel_area_segregation<<<blocks , threads>>>(d_particles, count, d_areas, max_influence_radius, map_size,
                                                       total_areas);
+        if (!check_kernel_launch("kernel_area_segregation launch")) {
+            return;
+        }
         kernel_calculate_densities<<<blocks , threads>>>(d_particles, count, max_influence_radius, d_areas, map_size);
+        if (!check_kernel_launch("kernel_calculate_densities launch")) {
+            return;
+        }
         kernel_calculate_forces<<<blocks , threads>>>(d_particles, count, target_density, pressure_multiplier,
                                                       max_influence_radius,
                                                       delta_time,
                                                       d_areas, map_size, viscosity, d_walls, walls.count, wall_default_push,
                                                       gravity_force, friction_multiplier);
+        if (!check_kernel_launch("kernel_calculate_forces launch")) {
+            return;
+        }
         kernel_change_positions<<<blocks , threads>>>(d_particles, count, delta_time, d_walls, walls.count,
                                                       collision_dampening,
                                                       collision_limit, max_influence_radius,
                                                       map_size);
+        if (!check_kernel_launch("kernel_change_positions launch")) {
+            return;
+        }
     }
-    cudaDeviceSynchronize();
-    cudaMemcpy(particles, d_particles, count * sizeof(particle_t), cudaMemcpyDeviceToHost);
+    if (!check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(update)")) {
+        return;
+    }
+    check_cuda(cudaMemcpy(particles, d_particles, count * sizeof(particle_t), cudaMemcpyDeviceToHost),
+               "cudaMemcpy(particles device-to-host)");
 }
 
 
@@ -447,21 +536,48 @@ __global__ void kernel_drawing_walls(wall_t *walls, int wall_count, vector2D_t s
 EXPORT void drawing(particle_t *particles, const int count, obstacles_t *walls, const int radius,
                     const vector2D_t screen_size, uint32_t *frame_buffer, const int colour_type, const int pitch,
                     const float visual_pressure_multiplier) {
-    int required_buffer_size = (pitch / 4) * (int) screen_size.y * sizeof(uint32_t);
+    if (count < 0 || (count > 0 && (particles == nullptr || d_particles == nullptr)) ||
+        walls == nullptr || walls->count < 0 || (walls->count > 0 && d_walls == nullptr) ||
+        frame_buffer == nullptr || radius < 0 || screen_size.x <= 0 || screen_size.y <= 0 ||
+        pitch <= 0 || visual_pressure_multiplier == 0) {
+        native_log(3, "CUDA", "drawing rejected invalid arguments: count=%d walls=%p frame_buffer=%p pitch=%d",
+                   count, (void *) walls, (void *) frame_buffer, pitch);
+        return;
+    }
+    size_t required_buffer_size = (size_t) (pitch / 4) * (size_t) screen_size.y * sizeof(uint32_t);
     if (current_frame_buffer_size < required_buffer_size) {
-        if (d_frame_buffer != nullptr) cudaFree(d_frame_buffer);
-        cudaMalloc((void **) &d_frame_buffer, required_buffer_size);
+        if (d_frame_buffer != nullptr) {
+            check_cuda(cudaFree(d_frame_buffer), "cudaFree(d_frame_buffer)");
+            d_frame_buffer = nullptr;
+        }
+        if (!check_cuda(cudaMalloc((void **) &d_frame_buffer, required_buffer_size),
+                        "cudaMalloc(d_frame_buffer)")) {
+            return;
+        }
         current_frame_buffer_size = required_buffer_size;
     }
-    cudaMemset(d_frame_buffer, 0, required_buffer_size);
+    if (!check_cuda(cudaMemset(d_frame_buffer, 0, required_buffer_size), "cudaMemset(frame_buffer)")) {
+        return;
+    }
 
     int threads = 256;
     int blocks = (count + threads - 1) / threads;
-    drawing_particles<<<blocks, threads>>>(d_particles, count, radius, screen_size,
-                                           d_frame_buffer, colour_type, pitch,
-                                           visual_pressure_multiplier);
+    if (count > 0) {
+        drawing_particles<<<blocks, threads>>>(d_particles, count, radius, screen_size,
+                                               d_frame_buffer, colour_type, pitch,
+                                               visual_pressure_multiplier);
+        if (!check_kernel_launch("drawing_particles launch")) {
+            return;
+        }
+    }
 
     kernel_drawing_walls<<<1, 1>>>(d_walls, walls->count, screen_size, d_frame_buffer, pitch);
-    cudaDeviceSynchronize();
-    cudaMemcpy(frame_buffer, d_frame_buffer, required_buffer_size, cudaMemcpyDeviceToHost);
+    if (!check_kernel_launch("kernel_drawing_walls launch")) {
+        return;
+    }
+    if (!check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(drawing)")) {
+        return;
+    }
+    check_cuda(cudaMemcpy(frame_buffer, d_frame_buffer, required_buffer_size, cudaMemcpyDeviceToHost),
+               "cudaMemcpy(frame_buffer device-to-host)");
 }

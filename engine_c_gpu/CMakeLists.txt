@@ -1,5 +1,5 @@
 ﻿cmake_minimum_required(VERSION 3.20)
-set(CMAKE_CUDA_COMPILER "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.3/bin/nvcc.exe")
+set(CMAKE_CUDA_COMPILER "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.8/bin/nvcc.exe")
 
 project(engine_c_gpu LANGUAGES CXX CUDA)
 

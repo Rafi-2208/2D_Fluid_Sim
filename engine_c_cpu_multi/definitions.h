@@ -77,6 +77,8 @@ void area_segregation(particle_t *particles, int count, area_t *areas, float max
 
 EXPORT void drawing(particle_t *particles, int count, obstacles_t *walls, int radius, vector2D_t screen_size,
                     uint32_t *frame_buffer, int colour_type, int pitch, float visual_pressure_multiplier);
+typedef void (*engine_log_callback_t)(int level, const char *component, const char *message);
+EXPORT void set_log_callback(engine_log_callback_t callback);
 
 void drawing_particles(particle_t *particles, int count, int radius, vector2D_t screen_size, uint32_t *frame_buffer,
                        int colour_type, int pitch, float visual_pressure_multiplier);
