@@ -2,39 +2,62 @@ import ctypes
 from modifiable_variables import *
 import os
 from app_logging import APP_LOGGER, log_native
+
+
 class Vector2D(ctypes.Structure):
     _fields_ = [
         ("x", ctypes.c_float),
-        ("y", ctypes.c_float)
+        ("y", ctypes.c_float),
     ]
+
+
+class Vector3D(ctypes.Structure):
+    _fields_ = [
+        ("x", ctypes.c_float),
+        ("y", ctypes.c_float),
+        ("z", ctypes.c_float),
+    ]
+
 
 class Particle(ctypes.Structure):
     _fields_ = [
-        ("position", Vector2D),
-        ("velocity", Vector2D),
+        ("position", Vector3D),
+        ("velocity", Vector3D),
         ("density", ctypes.c_float),
-        ("area" , ctypes.c_int)
+        ("area", ctypes.c_int),
     ]
+
 
 class Wall(ctypes.Structure):
     _fields_ = [
-        ("point1", Vector2D),
-        ("point2", Vector2D),
-        ("normal" , Vector2D)
+        ("point1", Vector3D),
+        ("point2", Vector3D),
+        ("point3", Vector3D),
+        ("normal", Vector3D),
     ]
+
 
 class Obstacles(ctypes.Structure):
     _fields_ = [
         ("walls", ctypes.POINTER(Wall)),
-        ("count", ctypes.c_int)
+        ("count", ctypes.c_int),
     ]
+
 
 class Area(ctypes.Structure):
     _fields_ = [
         ("area", ctypes.c_int),
         ("count", ctypes.c_int),
-        ("particles", ctypes.POINTER(ctypes.POINTER(Particle)))
+        ("particles", ctypes.POINTER(ctypes.POINTER(Particle))),
+    ]
 
+
+class Camera(ctypes.Structure):
+    _fields_ = [
+        ("position", Vector3D),
+        ("yaw", ctypes.c_float),
+        ("pitch", ctypes.c_float),
+        ("fov", ctypes.c_float),
     ]
 
 
@@ -163,7 +186,7 @@ def _configure_engine_functions(loaded_engine):
         ctypes.POINTER(Particle),
         ctypes.c_int,
         ctypes.c_float,
-        Vector2D,
+        Vector3D,
         Obstacles,
         ctypes.c_int,
         ctypes.c_float,
@@ -171,7 +194,7 @@ def _configure_engine_functions(loaded_engine):
         ctypes.c_float,
         ctypes.c_float,
         ctypes.c_float,
-        Vector2D,
+        Vector3D,
         ctypes.POINTER(Area),
         ctypes.c_float,
         ctypes.c_float,
@@ -189,5 +212,6 @@ def _configure_engine_functions(loaded_engine):
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_float,
+        Camera,
     ]
     loaded_engine.drawing.restype = None

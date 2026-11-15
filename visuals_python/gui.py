@@ -2,7 +2,6 @@
 from tkinter import ttk
 
 
-
 class Gui:
     def __init__(self, variables, root, load_settings_callback, save_settings_callback):
         self.variables = variables
@@ -17,14 +16,14 @@ class Gui:
         }
         self.engine_option_labels = {mode: label for label, mode in self.engine_options.items()}
         self.engine_selection_pending = False
-        self.window.title("Simulation Controls & Display")
+        self.window.title("3D Fluid Simulation Controls & Display")
 
-        self.control_frame = tk.Frame(self.window, width=450)
+        self.control_frame = tk.Frame(self.window, width=460)
         self.control_frame.pack(side=tk.LEFT, fill=tk.Y)
         self.control_frame.pack_propagate(False)
 
-        map_w, map_h = int(self.variables["MAP_SIZE"].x), int(self.variables["MAP_SIZE"].y)
-        self.pygame_frame = tk.Frame(self.window, width=map_w, height=map_h, bg='black')
+        screen_w, screen_h = int(self.variables["SCREEN_SIZE"].x), int(self.variables["SCREEN_SIZE"].y)
+        self.pygame_frame = tk.Frame(self.window, width=screen_w, height=screen_h, bg='black')
         self.pygame_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.sync_elements = []
@@ -32,17 +31,11 @@ class Gui:
         self.notebook = ttk.Notebook(self.control_frame)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        self.tab_spawn = tk.Frame(self.notebook)
-        self.tab_physics = tk.Frame(self.notebook)
-        self.tab_visuals = tk.Frame(self.notebook)
-        self.tab_walls = tk.Frame(self.notebook)
-        self.tab_settings = tk.Frame(self.notebook)
-
-        self.notebook.add(self.tab_spawn, text="Restart Settings")
-        self.notebook.add(self.tab_physics, text="Physics")
-        self.notebook.add(self.tab_visuals, text="Visuals")
-        self.notebook.add(self.tab_walls, text="Walls")
-        self.notebook.add(self.tab_settings, text="Settings")
+        self.tab_spawn = self._create_scrollable_tab("Restart Settings")
+        self.tab_physics = self._create_scrollable_tab("Physics")
+        self.tab_visuals = self._create_scrollable_tab("Visuals & Camera")
+        self.tab_walls = self._create_scrollable_tab("Walls")
+        self.tab_settings = self._create_scrollable_tab("Settings")
 
         self.create_trigger_button(
             self.tab_spawn,
@@ -51,26 +44,32 @@ class Gui:
             "RESTART_CLICKED",
             command=self.restart_simulation,
         )
+        self.create_slider_vector(self.tab_spawn, "Map size", 100.0, 2000.0,
+                                  self.variables["NEW_MAP_SIZE"], is_int=True)
         self.create_slider_vector(self.tab_spawn, "Starting position X range", 0.0, 2000.0,
                                   self.variables["STARTING_POSITION_X"], is_int=True)
-        self.create_slider_vector(self.tab_spawn, "Starting position Y range", 0.0, 1100.0,
+        self.create_slider_vector(self.tab_spawn, "Starting position Y range", 0.0, 2000.0,
                                   self.variables["STARTING_POSITION_Y"], is_int=True)
+        self.create_slider_vector(self.tab_spawn, "Starting position Z range", 0.0, 2000.0,
+                                  self.variables["STARTING_POSITION_Z"], is_int=True)
         self.create_slider_vector(self.tab_spawn, "Starting speed X range", -5000.0, 5000.0,
                                   self.variables["STARTING_SPEED_X"], is_int=True)
         self.create_slider_vector(self.tab_spawn, "Starting speed Y range", -5000.0, 5000.0,
                                   self.variables["STARTING_SPEED_Y"], is_int=True)
+        self.create_slider_vector(self.tab_spawn, "Starting speed Z range", -5000.0, 5000.0,
+                                  self.variables["STARTING_SPEED_Z"], is_int=True)
         self.create_slider_single(self.tab_spawn, "Spawned particle count", 1, self.variables["MAX_PARTICLES"],
-                                  self.variables,
-                                  "STARTING_PARTICLE_COUNT", is_int=True)
+                                  self.variables, "STARTING_PARTICLE_COUNT", is_int=True)
         self.create_slider_single(self.tab_spawn, "Random wall count", 0.0, 50.0,
                                   self.variables, "RANDOM_WALL_COUNT", is_int=True)
         self.create_slider_single(self.tab_spawn, "Random wall max len", 0.0, 2000.0,
                                   self.variables, "RANDOM_WALL_MAX_LEN", is_int=True)
+
         self.create_slider_vector(self.tab_physics, "Gravity", -1000.0, 1000.0, self.variables["GRAVITY"])
-        self.create_slider_single(self.tab_physics, "Max Influence Dist", 1, 100, self.variables,
+        self.create_slider_single(self.tab_physics, "Max Influence Dist", 5, 100, self.variables,
                                   "MAX_INFLUENCE_DISTANCE")
         self.create_slider_single(self.tab_physics, "Target Density", 1000, 500000, self.variables, "TARGET_DENSITY")
-        self.create_slider_single(self.tab_physics, "Pressure Multiplier", 0.00001, 0.001, self.variables,
+        self.create_slider_single(self.tab_physics, "Pressure Multiplier", 0.00001, 0.005, self.variables,
                                   "PRESSURE_MULTIPLIER", resolution=0.00001)
         self.create_slider_single(self.tab_physics, "Collision Dampening", 0.0, 1.0, self.variables,
                                   "COLLISION_DAMPENING")
@@ -81,12 +80,18 @@ class Gui:
         self.create_slider_single(self.tab_physics, "Simulation substeps", 1, 20, self.variables,
                                   "SUB_STEPS", is_int=True)
 
-
-
-        self.create_slider_single(self.tab_visuals, "Visual Radius", 1, 20, self.variables, "VISUAL_RADIUS",
+        self.create_slider_single(self.tab_visuals, "Visual Radius", 1, 30, self.variables, "VISUAL_RADIUS",
                                   is_int=True)
         self.create_slider_single(self.tab_visuals, "Visual Color Mult", 10000, 500000, self.variables,
                                   "VISUAL_COLOUR_PRESSURE_MULTIPLIER", is_int=True)
+        self.create_slider_single(self.tab_visuals, "Camera Yaw (rad)", -3.14, 3.14, self.variables,
+                                  "CAMERA_YAW", resolution=0.01)
+        self.create_slider_single(self.tab_visuals, "Camera Pitch (rad)", -1.5, 1.5, self.variables,
+                                  "CAMERA_PITCH", resolution=0.01)
+        self.create_slider_single(self.tab_visuals, "Camera Distance", 100.0, 3500.0, self.variables,
+                                  "CAMERA_DISTANCE", resolution=10.0)
+        self.create_slider_single(self.tab_visuals, "Camera FOV (deg)", 20.0, 120.0, self.variables,
+                                  "CAMERA_FOV", resolution=1.0)
 
         self.colour_options = {
             "Blue to red": 0,
@@ -119,16 +124,14 @@ class Gui:
         )
         self.fps_checkbox.pack(padx=20, pady=6, anchor=tk.W)
 
-
-
-        self.create_trigger_button(self.tab_walls, "Add Wall", self.variables, "ADD_WALL_CLICKED")
+        self.create_trigger_button(self.tab_walls, "Add 3D Wall Quad", self.variables, "ADD_WALL_CLICKED")
         self.create_trigger_button(self.tab_walls, "Remove Wall", self.variables, "REMOVE_WALL_CLICKED")
-        self.create_slider_vector(self.tab_walls, "Wall point 1", -100.0, 3000,
+        self.create_slider_vector(self.tab_walls, "Wall corner 1 (Origin)", -100.0, 2000.0,
                                   self.variables["WALL_POINT_1"], is_int=True)
-        self.create_slider_vector(self.tab_walls, "Wall point 2", -100.0, 3000,
+        self.create_slider_vector(self.tab_walls, "Wall corner 2 (Edge U)", -100.0, 2000.0,
                                   self.variables["WALL_POINT_2"], is_int=True)
-
-
+        self.create_slider_vector(self.tab_walls, "Wall corner 3 (Edge V)", -100.0, 2000.0,
+                                  self.variables["WALL_POINT_3"], is_int=True)
 
         self.settings_filename = {}
         self.create_text_input(self.tab_settings, "Settings filename", self.settings_filename, "filename")
@@ -166,6 +169,26 @@ class Gui:
 
         self.window.after(100, self.sync_loop)
         self.pygame_frame.bind("<Configure>", self.on_resize)
+
+    def _create_scrollable_tab(self, title):
+        outer = tk.Frame(self.notebook)
+        self.notebook.add(outer, text=title)
+        canvas = tk.Canvas(outer, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(outer, orient=tk.VERTICAL, command=canvas.yview)
+        inner = tk.Frame(canvas)
+        inner.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        window_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+        canvas.bind(
+            "<Configure>",
+            lambda e: canvas.itemconfig(window_id, width=e.width)
+        )
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        return inner
 
     def sync_loop(self):
         for slider, entry_var, target, key, is_dict in self.sync_elements:
@@ -213,6 +236,8 @@ class Gui:
         if resolution is None:
             resolution = 1 if is_int else 0.01
 
+        axes = ['x', 'y', 'z'] if hasattr(target_obj, 'z') else ['x', 'y']
+
         def build_component(axis):
             frame = tk.Frame(parent)
             frame.pack(padx=padding_x, pady=padding_y, fill=tk.X)
@@ -249,8 +274,8 @@ class Gui:
 
             self.sync_elements.append((slider, entry_var, target_obj, axis, False))
 
-        build_component('x')
-        build_component('y')
+        for axis in axes:
+            build_component(axis)
 
     def create_slider_single(self, parent, label, min_val, max_val, target_dict, key, is_int=False, resolution=None):
         if resolution is None:
@@ -320,9 +345,9 @@ class Gui:
 
     def on_resize(self, event):
         if event.widget == self.pygame_frame:
-            current_x = int(self.variables["MAP_SIZE"].x)
-            current_y = int(self.variables["MAP_SIZE"].y)
+            current_x = int(self.variables["SCREEN_SIZE"].x)
+            current_y = int(self.variables["SCREEN_SIZE"].y)
             if abs(event.width - current_x) > 2 or abs(event.height - current_y) > 2:
-                self.variables["NEW_MAP_SIZE"].x = event.width
-                self.variables["NEW_MAP_SIZE"].y = event.height
+                self.variables["NEW_SCREEN_SIZE"].x = event.width
+                self.variables["NEW_SCREEN_SIZE"].y = event.height
                 self.variables["RESTART_CLICKED"] = True

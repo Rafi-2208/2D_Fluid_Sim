@@ -1,6 +1,5 @@
 ﻿import random
-from fileinput import filename
-
+import math
 import pygame
 from utility_functions import *
 from modifiable_variables import *
@@ -40,7 +39,9 @@ def load_config(config_filename):
 def save_config(config_filename):
     config_data = VARIABLES.copy()
     for key, value in config_data.items():
-        if hasattr(value, "x") and hasattr(value, "y"):
+        if hasattr(value, "z"):
+            config_data[key] = (value.x, value.y, value.z)
+        elif hasattr(value, "x") and hasattr(value, "y"):
             config_data[key] = (value.x, value.y)
 
     with open(config_filename, "w") as file:
@@ -52,7 +53,11 @@ def apply_config(config_filename):
     loaded_variables = load_config(config_filename)
     for key, value in loaded_variables.items():
         current_value = VARIABLES.get(key)
-        if hasattr(current_value, "x") and hasattr(current_value, "y"):
+        if hasattr(current_value, "z"):
+            current_value.x = value[0]
+            current_value.y = value[1]
+            current_value.z = value[2]
+        elif hasattr(current_value, "x") and hasattr(current_value, "y"):
             current_value.x = value[0]
             current_value.y = value[1]
         else:
@@ -62,61 +67,126 @@ def apply_config(config_filename):
 
 
 def initialize_vectors():
-    VARIABLES["MAP_SIZE"] = Vector2D(VARIABLES["MAP_SIZE"][0], VARIABLES["MAP_SIZE"][1])
-    VARIABLES["NEW_MAP_SIZE"] = Vector2D(VARIABLES["NEW_MAP_SIZE"][0], VARIABLES["NEW_MAP_SIZE"][1])
-    VARIABLES["GRAVITY"] = Vector2D(VARIABLES["GRAVITY"][0], VARIABLES["GRAVITY"][1])
-    VARIABLES["STARTING_POSITION_X"] = Vector2D(VARIABLES["STARTING_POSITION_X"][0],
-                                                VARIABLES["STARTING_POSITION_X"][1])
-    VARIABLES["STARTING_POSITION_Y"] = Vector2D(VARIABLES["STARTING_POSITION_Y"][0],
-                                                VARIABLES["STARTING_POSITION_Y"][1])
+    VARIABLES["SCREEN_SIZE"] = Vector2D(VARIABLES["SCREEN_SIZE"][0], VARIABLES["SCREEN_SIZE"][1])
+    VARIABLES["NEW_SCREEN_SIZE"] = Vector2D(VARIABLES["NEW_SCREEN_SIZE"][0], VARIABLES["NEW_SCREEN_SIZE"][1])
+    VARIABLES["MAP_SIZE"] = Vector3D(VARIABLES["MAP_SIZE"][0], VARIABLES["MAP_SIZE"][1], VARIABLES["MAP_SIZE"][2])
+    VARIABLES["NEW_MAP_SIZE"] = Vector3D(
+        VARIABLES["NEW_MAP_SIZE"][0], VARIABLES["NEW_MAP_SIZE"][1], VARIABLES["NEW_MAP_SIZE"][2]
+    )
+    VARIABLES["GRAVITY"] = Vector3D(VARIABLES["GRAVITY"][0], VARIABLES["GRAVITY"][1], VARIABLES["GRAVITY"][2])
+    VARIABLES["STARTING_POSITION_X"] = Vector2D(
+        VARIABLES["STARTING_POSITION_X"][0], VARIABLES["STARTING_POSITION_X"][1]
+    )
+    VARIABLES["STARTING_POSITION_Y"] = Vector2D(
+        VARIABLES["STARTING_POSITION_Y"][0], VARIABLES["STARTING_POSITION_Y"][1]
+    )
+    VARIABLES["STARTING_POSITION_Z"] = Vector2D(
+        VARIABLES["STARTING_POSITION_Z"][0], VARIABLES["STARTING_POSITION_Z"][1]
+    )
     VARIABLES["STARTING_SPEED_X"] = Vector2D(VARIABLES["STARTING_SPEED_X"][0], VARIABLES["STARTING_SPEED_X"][1])
     VARIABLES["STARTING_SPEED_Y"] = Vector2D(VARIABLES["STARTING_SPEED_Y"][0], VARIABLES["STARTING_SPEED_Y"][1])
-    VARIABLES["WALL_POINT_1"] = Vector2D(VARIABLES["WALL_POINT_1"][0], VARIABLES["WALL_POINT_1"][1])
-    VARIABLES["WALL_POINT_2"] = Vector2D(VARIABLES["WALL_POINT_2"][0], VARIABLES["WALL_POINT_2"][1])
+    VARIABLES["STARTING_SPEED_Z"] = Vector2D(VARIABLES["STARTING_SPEED_Z"][0], VARIABLES["STARTING_SPEED_Z"][1])
+    VARIABLES["WALL_POINT_1"] = Vector3D(
+        VARIABLES["WALL_POINT_1"][0], VARIABLES["WALL_POINT_1"][1], VARIABLES["WALL_POINT_1"][2]
+    )
+    VARIABLES["WALL_POINT_2"] = Vector3D(
+        VARIABLES["WALL_POINT_2"][0], VARIABLES["WALL_POINT_2"][1], VARIABLES["WALL_POINT_2"][2]
+    )
+    VARIABLES["WALL_POINT_3"] = Vector3D(
+        VARIABLES["WALL_POINT_3"][0], VARIABLES["WALL_POINT_3"][1], VARIABLES["WALL_POINT_3"][2]
+    )
 
 
 def reset_vectors():
-    VARIABLES["MAP_SIZE"] = (VARIABLES["MAP_SIZE"].x, VARIABLES["MAP_SIZE"].y)
-    VARIABLES["NEW_MAP_SIZE"] = (VARIABLES["NEW_MAP_SIZE"].x, VARIABLES["NEW_MAP_SIZE"].y)
-    VARIABLES["GRAVITY"] = (VARIABLES["GRAVITY"].x, VARIABLES["GRAVITY"].y)
+    VARIABLES["SCREEN_SIZE"] = (VARIABLES["SCREEN_SIZE"].x, VARIABLES["SCREEN_SIZE"].y)
+    VARIABLES["NEW_SCREEN_SIZE"] = (VARIABLES["NEW_SCREEN_SIZE"].x, VARIABLES["NEW_SCREEN_SIZE"].y)
+    VARIABLES["MAP_SIZE"] = (VARIABLES["MAP_SIZE"].x, VARIABLES["MAP_SIZE"].y, VARIABLES["MAP_SIZE"].z)
+    VARIABLES["NEW_MAP_SIZE"] = (VARIABLES["NEW_MAP_SIZE"].x, VARIABLES["NEW_MAP_SIZE"].y, VARIABLES["NEW_MAP_SIZE"].z)
+    VARIABLES["GRAVITY"] = (VARIABLES["GRAVITY"].x, VARIABLES["GRAVITY"].y, VARIABLES["GRAVITY"].z)
     VARIABLES["STARTING_POSITION_X"] = (VARIABLES["STARTING_POSITION_X"].x, VARIABLES["STARTING_POSITION_X"].y)
     VARIABLES["STARTING_POSITION_Y"] = (VARIABLES["STARTING_POSITION_Y"].x, VARIABLES["STARTING_POSITION_Y"].y)
+    VARIABLES["STARTING_POSITION_Z"] = (VARIABLES["STARTING_POSITION_Z"].x, VARIABLES["STARTING_POSITION_Z"].y)
     VARIABLES["STARTING_SPEED_X"] = (VARIABLES["STARTING_SPEED_X"].x, VARIABLES["STARTING_SPEED_X"].y)
     VARIABLES["STARTING_SPEED_Y"] = (VARIABLES["STARTING_SPEED_Y"].x, VARIABLES["STARTING_SPEED_Y"].y)
-    VARIABLES["WALL_POINT_1"] = (0, 0)
-    VARIABLES["WALL_POINT_2"] = (0, 0)
+    VARIABLES["STARTING_SPEED_Z"] = (VARIABLES["STARTING_SPEED_Z"].x, VARIABLES["STARTING_SPEED_Z"].y)
+    VARIABLES["WALL_POINT_1"] = (
+        VARIABLES["WALL_POINT_1"].x, VARIABLES["WALL_POINT_1"].y, VARIABLES["WALL_POINT_1"].z
+    )
+    VARIABLES["WALL_POINT_2"] = (
+        VARIABLES["WALL_POINT_2"].x, VARIABLES["WALL_POINT_2"].y, VARIABLES["WALL_POINT_2"].z
+    )
+    VARIABLES["WALL_POINT_3"] = (
+        VARIABLES["WALL_POINT_3"].x, VARIABLES["WALL_POINT_3"].y, VARIABLES["WALL_POINT_3"].z
+    )
 
 
 def initialize_walls(saved_user_walls=None):
     if saved_user_walls is None:
         saved_user_walls = []
 
-    walls_array = Wall * VARIABLES["MAX_WALLS"]
-    walls_array = walls_array()
+    walls_array = (Wall * VARIABLES["MAX_WALLS"])()
 
-    walls_array[0].point1 = Vector2D(0.0, 0.0)
-    walls_array[0].point2 = Vector2D(VARIABLES["MAP_SIZE"].x, 0.0)
-    walls_array[1].point1 = Vector2D(VARIABLES["MAP_SIZE"].x, 0.0)
-    walls_array[1].point2 = Vector2D(VARIABLES["MAP_SIZE"].x, VARIABLES["MAP_SIZE"].y)
-    walls_array[2].point1 = Vector2D(VARIABLES["MAP_SIZE"].x, VARIABLES["MAP_SIZE"].y)
-    walls_array[2].point2 = Vector2D(0.0, VARIABLES["MAP_SIZE"].y)
-    walls_array[3].point1 = Vector2D(0.0, VARIABLES["MAP_SIZE"].y)
-    walls_array[3].point2 = Vector2D(0.0, 0.0)
+    w = VARIABLES["MAP_SIZE"].x
+    h = VARIABLES["MAP_SIZE"].y
+    d = VARIABLES["MAP_SIZE"].z
 
-    for i in range(4, 4 + VARIABLES["RANDOM_WALL_COUNT"]):
-        walls_array[i].point1 = Vector2D(random.randint(0, int(VARIABLES["MAP_SIZE"].x)),
-                                         random.randint(0, int(VARIABLES["MAP_SIZE"].y)))
-        walls_array[i].point2 = Vector2D(walls_array[i].point1.x + random.randint(-VARIABLES["RANDOM_WALL_MAX_LEN"],
-                                                                                  VARIABLES["RANDOM_WALL_MAX_LEN"]),
-                                         walls_array[i].point1.y + random.randint(-VARIABLES["RANDOM_WALL_MAX_LEN"],
-                                                                                  VARIABLES["RANDOM_WALL_MAX_LEN"]))
+    # 6 faces of the 3D container box [0, w] x [0, h] x [0, d]
+    # 0: Top (y = 0)
+    walls_array[0].point1 = Vector3D(0.0, 0.0, 0.0)
+    walls_array[0].point2 = Vector3D(w, 0.0, 0.0)
+    walls_array[0].point3 = Vector3D(0.0, 0.0, d)
 
-    user_start_index = 4 + VARIABLES["RANDOM_WALL_COUNT"]
-    for i, (p1, p2) in enumerate(saved_user_walls):
+    # 1: Bottom / Floor (y = h)
+    walls_array[1].point1 = Vector3D(0.0, h, 0.0)
+    walls_array[1].point2 = Vector3D(0.0, h, d)
+    walls_array[1].point3 = Vector3D(w, h, 0.0)
+
+    # 2: Left (x = 0)
+    walls_array[2].point1 = Vector3D(0.0, 0.0, 0.0)
+    walls_array[2].point2 = Vector3D(0.0, 0.0, d)
+    walls_array[2].point3 = Vector3D(0.0, h, 0.0)
+
+    # 3: Right (x = w)
+    walls_array[3].point1 = Vector3D(w, 0.0, 0.0)
+    walls_array[3].point2 = Vector3D(w, h, 0.0)
+    walls_array[3].point3 = Vector3D(w, 0.0, d)
+
+    # 4: Back (z = 0)
+    walls_array[4].point1 = Vector3D(0.0, 0.0, 0.0)
+    walls_array[4].point2 = Vector3D(0.0, h, 0.0)
+    walls_array[4].point3 = Vector3D(w, 0.0, 0.0)
+
+    # 5: Front (z = d)
+    walls_array[5].point1 = Vector3D(0.0, 0.0, d)
+    walls_array[5].point2 = Vector3D(w, 0.0, d)
+    walls_array[5].point3 = Vector3D(0.0, h, d)
+
+    max_len = int(VARIABLES["RANDOM_WALL_MAX_LEN"])
+    for i in range(6, 6 + VARIABLES["RANDOM_WALL_COUNT"]):
+        p1 = Vector3D(
+            random.randint(0, int(w)),
+            random.randint(0, int(h)),
+            random.randint(0, int(d)),
+        )
+        walls_array[i].point1 = p1
+        walls_array[i].point2 = Vector3D(
+            p1.x + random.randint(-max_len, max_len),
+            p1.y + random.randint(-max_len, max_len),
+            p1.z + random.randint(-max_len, max_len),
+        )
+        walls_array[i].point3 = Vector3D(
+            p1.x + random.randint(-max_len, max_len),
+            p1.y + random.randint(-max_len, max_len),
+            p1.z + random.randint(-max_len, max_len),
+        )
+
+    user_start_index = 6 + VARIABLES["RANDOM_WALL_COUNT"]
+    for i, (p1, p2, p3) in enumerate(saved_user_walls):
         walls_array[user_start_index + i].point1 = p1
         walls_array[user_start_index + i].point2 = p2
+        walls_array[user_start_index + i].point3 = p3
 
-    total_walls = 4 + VARIABLES["RANDOM_WALL_COUNT"] + len(saved_user_walls)
+    total_walls = 6 + VARIABLES["RANDOM_WALL_COUNT"] + len(saved_user_walls)
 
     for i in range(total_walls):
         walls_array[i].normal = calculate_normal(walls_array[i])
@@ -129,42 +199,51 @@ def initialize_walls(saved_user_walls=None):
 
 
 def initialize_areas():
-    x_limit = int(VARIABLES["MAP_SIZE"].x / VARIABLES["MAX_INFLUENCE_DISTANCE"])
-    y_limit = int(VARIABLES["MAP_SIZE"].y / VARIABLES["MAX_INFLUENCE_DISTANCE"])
-    total_areas = x_limit * y_limit
+    x_limit = max(1, int(VARIABLES["MAP_SIZE"].x / VARIABLES["MAX_INFLUENCE_DISTANCE"]))
+    y_limit = max(1, int(VARIABLES["MAP_SIZE"].y / VARIABLES["MAX_INFLUENCE_DISTANCE"]))
+    z_limit = max(1, int(VARIABLES["MAP_SIZE"].z / VARIABLES["MAX_INFLUENCE_DISTANCE"]))
+    total_areas = x_limit * y_limit * z_limit
     areas_array = (Area * total_areas)()
+
+    PointerArrayType = ctypes.POINTER(Particle) * VARIABLES["MAX_PARTICLES_PER_AREA"]
+    backing_blocks = (PointerArrayType * total_areas)()
 
     for i in range(total_areas):
         areas_array[i].area = i
         areas_array[i].count = 0
-        PointerArrayType = ctypes.POINTER(Particle) * VARIABLES["MAX_PARTICLES_PER_AREA"]
-        particle_pointers_buffer = PointerArrayType()
-        areas_array[i].particles = ctypes.cast(particle_pointers_buffer, ctypes.POINTER(ctypes.POINTER(Particle)))
+        areas_array[i].particles = ctypes.cast(backing_blocks[i], ctypes.POINTER(ctypes.POINTER(Particle)))
 
+    areas_array._backing_blocks = backing_blocks
     return areas_array
 
 
 def initialize_particles(particle_count):
-    particles_array = Particle * VARIABLES["MAX_PARTICLES"]
-    particles_array = particles_array()
+    particles_array = (Particle * VARIABLES["MAX_PARTICLES"])()
 
     pos_x_min = int(min(VARIABLES["STARTING_POSITION_X"].x, VARIABLES["STARTING_POSITION_X"].y))
     pos_x_max = int(max(VARIABLES["STARTING_POSITION_X"].x, VARIABLES["STARTING_POSITION_X"].y))
     pos_y_min = int(min(VARIABLES["STARTING_POSITION_Y"].x, VARIABLES["STARTING_POSITION_Y"].y))
     pos_y_max = int(max(VARIABLES["STARTING_POSITION_Y"].x, VARIABLES["STARTING_POSITION_Y"].y))
+    pos_z_min = int(min(VARIABLES["STARTING_POSITION_Z"].x, VARIABLES["STARTING_POSITION_Z"].y))
+    pos_z_max = int(max(VARIABLES["STARTING_POSITION_Z"].x, VARIABLES["STARTING_POSITION_Z"].y))
+
     spd_x_min = int(min(VARIABLES["STARTING_SPEED_X"].x, VARIABLES["STARTING_SPEED_X"].y))
     spd_x_max = int(max(VARIABLES["STARTING_SPEED_X"].x, VARIABLES["STARTING_SPEED_X"].y))
     spd_y_min = int(min(VARIABLES["STARTING_SPEED_Y"].x, VARIABLES["STARTING_SPEED_Y"].y))
     spd_y_max = int(max(VARIABLES["STARTING_SPEED_Y"].x, VARIABLES["STARTING_SPEED_Y"].y))
+    spd_z_min = int(min(VARIABLES["STARTING_SPEED_Z"].x, VARIABLES["STARTING_SPEED_Z"].y))
+    spd_z_max = int(max(VARIABLES["STARTING_SPEED_Z"].x, VARIABLES["STARTING_SPEED_Z"].y))
 
     for i in range(particle_count):
         start_x = random.randint(pos_x_min, pos_x_max)
         start_y = random.randint(pos_y_min, pos_y_max)
-        particles_array[i].position = Vector2D(start_x, start_y)
+        start_z = random.randint(pos_z_min, pos_z_max)
+        particles_array[i].position = Vector3D(start_x, start_y, start_z)
 
         vel_x = random.randint(spd_x_min, spd_x_max)
         vel_y = random.randint(spd_y_min, spd_y_max)
-        particles_array[i].velocity = Vector2D(vel_x, vel_y)
+        vel_z = random.randint(spd_z_min, spd_z_max)
+        particles_array[i].velocity = Vector3D(vel_x, vel_y, vel_z)
 
     return particles_array
 
@@ -172,40 +251,53 @@ def initialize_particles(particle_count):
 def add_user_wall(walls_array, obstacles):
     if VARIABLES["WALL_COUNT"] + VARIABLES["RANDOM_WALL_COUNT"] < VARIABLES["MAX_WALLS"]:
         new_wall_index = VARIABLES["WALL_COUNT"] + VARIABLES["RANDOM_WALL_COUNT"]
-        walls_array[new_wall_index].point1 = Vector2D(VARIABLES["WALL_POINT_1"].x, VARIABLES["WALL_POINT_1"].y)
-        walls_array[new_wall_index].point2 = Vector2D(VARIABLES["WALL_POINT_2"].x, VARIABLES["WALL_POINT_2"].y)
+        walls_array[new_wall_index].point1 = Vector3D(
+            VARIABLES["WALL_POINT_1"].x, VARIABLES["WALL_POINT_1"].y, VARIABLES["WALL_POINT_1"].z
+        )
+        walls_array[new_wall_index].point2 = Vector3D(
+            VARIABLES["WALL_POINT_2"].x, VARIABLES["WALL_POINT_2"].y, VARIABLES["WALL_POINT_2"].z
+        )
+        walls_array[new_wall_index].point3 = Vector3D(
+            VARIABLES["WALL_POINT_3"].x, VARIABLES["WALL_POINT_3"].y, VARIABLES["WALL_POINT_3"].z
+        )
         walls_array[new_wall_index].normal = calculate_normal(walls_array[new_wall_index])
         VARIABLES["WALL_COUNT"] += 1
         obstacles.count = VARIABLES["WALL_COUNT"] + VARIABLES["RANDOM_WALL_COUNT"]
 
 
 def remove_user_wall(obstacles):
-    if VARIABLES["WALL_COUNT"] > 4:
+    if VARIABLES["WALL_COUNT"] > 6:
         VARIABLES["WALL_COUNT"] -= 1
         obstacles.count = VARIABLES["WALL_COUNT"] + VARIABLES["RANDOM_WALL_COUNT"]
 
 
 def extract_saved_walls(walls_array, obstacles):
-    user_wall_count = VARIABLES["WALL_COUNT"] - 4
+    user_wall_count = max(0, VARIABLES["WALL_COUNT"] - 6)
     saved_user_walls = []
 
     for i in range(obstacles.count - user_wall_count, obstacles.count):
-        p1 = Vector2D(walls_array[i].point1.x, walls_array[i].point1.y)
-        p2 = Vector2D(walls_array[i].point2.x, walls_array[i].point2.y)
-        saved_user_walls.append((p1, p2))
+        p1 = Vector3D(walls_array[i].point1.x, walls_array[i].point1.y, walls_array[i].point1.z)
+        p2 = Vector3D(walls_array[i].point2.x, walls_array[i].point2.y, walls_array[i].point2.z)
+        p3 = Vector3D(walls_array[i].point3.x, walls_array[i].point3.y, walls_array[i].point3.z)
+        saved_user_walls.append((p1, p2, p3))
 
     return saved_user_walls
 
 
 def handle_restart(walls_array, obstacles, gui):
-    new_w, new_h = int(VARIABLES["NEW_MAP_SIZE"].x), int(VARIABLES["NEW_MAP_SIZE"].y)
-    VARIABLES["MAP_SIZE"].x = new_w
-    VARIABLES["MAP_SIZE"].y = new_h
+    new_screen_w = max(100, int(VARIABLES["NEW_SCREEN_SIZE"].x))
+    new_screen_h = max(100, int(VARIABLES["NEW_SCREEN_SIZE"].y))
+    VARIABLES["SCREEN_SIZE"].x = new_screen_w
+    VARIABLES["SCREEN_SIZE"].y = new_screen_h
 
-    gui.pygame_frame.config(width=new_w, height=new_h)
+    VARIABLES["MAP_SIZE"].x = max(50.0, float(VARIABLES["NEW_MAP_SIZE"].x))
+    VARIABLES["MAP_SIZE"].y = max(50.0, float(VARIABLES["NEW_MAP_SIZE"].y))
+    VARIABLES["MAP_SIZE"].z = max(50.0, float(VARIABLES["NEW_MAP_SIZE"].z))
+
+    gui.pygame_frame.config(width=new_screen_w, height=new_screen_h)
 
     areas_array = initialize_areas()
-    screen = pygame.display.set_mode((new_w, new_h))
+    screen = pygame.display.set_mode((new_screen_w, new_screen_h))
 
     VARIABLES["PARTICLE_COUNT"] = int(VARIABLES["STARTING_PARTICLE_COUNT"])
     particles_array = initialize_particles(VARIABLES["PARTICLE_COUNT"])
@@ -247,11 +339,14 @@ def update_physics(particles_array, obstacles, areas_array, dt):
 
 def log_simulation_settings(obstacles):
     APP_LOGGER.info(
-        "Simulation settings: engine=%s map=%sx%s particles=%d max_particles=%d walls=%d "
-        "substeps=%d influence_radius=%s target_density=%s pressure_multiplier=%s gravity=(%s,%s)",
+        "Simulation settings: engine=%s map=%sx%sx%s screen=%sx%s particles=%d max_particles=%d walls=%d "
+        "substeps=%d influence_radius=%s target_density=%s pressure_multiplier=%s gravity=(%s,%s,%s)",
         get_engine_name(),
         VARIABLES["MAP_SIZE"].x,
         VARIABLES["MAP_SIZE"].y,
+        VARIABLES["MAP_SIZE"].z,
+        VARIABLES["SCREEN_SIZE"].x,
+        VARIABLES["SCREEN_SIZE"].y,
         VARIABLES["PARTICLE_COUNT"],
         VARIABLES["MAX_PARTICLES"],
         obstacles.count,
@@ -261,6 +356,7 @@ def log_simulation_settings(obstacles):
         VARIABLES["PRESSURE_MULTIPLIER"],
         VARIABLES["GRAVITY"].x,
         VARIABLES["GRAVITY"].y,
+        VARIABLES["GRAVITY"].z,
     )
 
 
@@ -272,16 +368,25 @@ def draw_screen(screen, particles_array, obstacles, fps_value, main_font):
     view = memoryview(screen.get_view('1'))
     buffer_array = (ctypes.c_uint32 * (len(view) // 4)).from_buffer(view)
 
+    camera = build_orbit_camera(
+        VARIABLES["MAP_SIZE"],
+        float(VARIABLES["CAMERA_YAW"]),
+        float(VARIABLES["CAMERA_PITCH"]),
+        float(VARIABLES["CAMERA_DISTANCE"]),
+        float(VARIABLES["CAMERA_FOV"]),
+    )
+
     get_engine().drawing(
         ctypes.cast(particles_array, ctypes.POINTER(Particle)),
         VARIABLES["PARTICLE_COUNT"],
         ctypes.byref(obstacles),
         VARIABLES["VISUAL_RADIUS"],
-        VARIABLES["MAP_SIZE"],
+        VARIABLES["SCREEN_SIZE"],
         buffer_array,
         VARIABLES["VISUAL_COLOUR"],
         pitch,
-        VARIABLES["VISUAL_COLOUR_PRESSURE_MULTIPLIER"]
+        VARIABLES["VISUAL_COLOUR_PRESSURE_MULTIPLIER"],
+        camera,
     )
 
     view.release()
@@ -292,6 +397,14 @@ def draw_screen(screen, particles_array, obstacles, fps_value, main_font):
 
     if VARIABLES["FPS_COUNTER"]:
         draw_text(screen, "FPS: " + str(round(fps_value, 2)), main_font, 20, 20, (0, 255, 0))
+        draw_text(
+            screen,
+            "Drag LMB: Orbit 3D Camera | Scroll: Zoom",
+            main_font,
+            20,
+            48,
+            (180, 200, 220),
+        )
 
     pygame.display.flip()
 
@@ -304,7 +417,7 @@ def main():
     initialize_vectors()
     walls_array, obstacles = initialize_walls()
     areas_array = initialize_areas()
-    particles_array = initialize_particles(VARIABLES["MAX_PARTICLES"])
+    particles_array = initialize_particles(VARIABLES["PARTICLE_COUNT"])
     log_simulation_settings(obstacles)
 
     root = tk.Tk()
@@ -323,11 +436,13 @@ def main():
     pygame.init()
     pygame.font.init()
 
-    main_font = pygame.font.SysFont(None, 30)
+    main_font = pygame.font.SysFont(None, 28)
     clock = pygame.time.Clock()
-    screen = pygame.display.set_mode((int(VARIABLES["MAP_SIZE"].x), int(VARIABLES["MAP_SIZE"].y)))
+    screen = pygame.display.set_mode((int(VARIABLES["SCREEN_SIZE"].x), int(VARIABLES["SCREEN_SIZE"].y)))
 
     running = True
+    mouse_dragging = False
+    last_mouse_pos = (0, 0)
     summary_started = time.monotonic()
     summary_frame_count = 0
     summary_frame_time = 0.0
@@ -381,6 +496,27 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mouse_dragging = True
+                last_mouse_pos = event.pos
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                mouse_dragging = False
+            elif event.type == pygame.MOUSEMOTION and mouse_dragging:
+                dx = event.pos[0] - last_mouse_pos[0]
+                dy = event.pos[1] - last_mouse_pos[1]
+                last_mouse_pos = event.pos
+                yaw = float(VARIABLES["CAMERA_YAW"]) + dx * 0.007
+                while yaw > math.pi:
+                    yaw -= 2.0 * math.pi
+                while yaw < -math.pi:
+                    yaw += 2.0 * math.pi
+                pitch = max(-1.5, min(1.5, float(VARIABLES["CAMERA_PITCH"]) + dy * 0.007))
+                VARIABLES["CAMERA_YAW"] = round(yaw, 3)
+                VARIABLES["CAMERA_PITCH"] = round(pitch, 3)
+            elif event.type == pygame.MOUSEWHEEL:
+                dist = float(VARIABLES["CAMERA_DISTANCE"]) - event.y * 60.0
+                VARIABLES["CAMERA_DISTANCE"] = max(100.0, min(3500.0, dist))
+
         dt = clock.tick_busy_loop(60) / 1000.0
         fps_value = clock.get_fps()
         frame_started = time.perf_counter()
